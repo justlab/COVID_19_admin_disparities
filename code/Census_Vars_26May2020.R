@@ -59,61 +59,6 @@ coalesce_join <- function(x, y,
   dplyr::bind_cols(joined, coalesced)[cols]
 }
 
-
-# median_standardize <- function(raw_var){
-#   standardized_var = (raw_var - median(raw_var))/mad(raw_var)
-# }
-
-# fit_gam_with_markovsmooths <- function(sf_shape_of_ZCTA_BWQS, knots){
-#   
-#   sp_shape_of_ZCTA_BWQS <- as_Spatial(sf_shape_of_ZCTA_BWQS)
-#   
-#   zcta_polygons <<- polygons(sp_shape_of_ZCTA_BWQS)
-#   
-#   df_wout_shape <<- droplevels(as(sp_shape_of_ZCTA_BWQS, 'data.frame'))
-#   neighbor_matrix <<- poly2nb(ZCTA_BWQS_COVID_sp, row.names = df_wout_shape$zcta)
-#   names(neighbor_matrix) <<- attr(neighbor_matrix, "region.id")
-#   
-#   smooths = knots
-#   
-#   gam_results <- smooths %>%
-#     map_dfr(., ~ gam_per_smooth(.x, df_wout_shape, zcta_polygons, neighbor_matrix))
-#   
-#   return(gam_results)
-# }
-# 
-# gam_per_smooth <- function(x, df_wout_shape, zcta_polygons, neighbor_matrix){
-#   
-#   model <- gam(
-#     deaths_count ~ BWQS_index + scale(age65_plus) + offset(log(total_pop1)) +
-#       s(as.factor(zcta),
-#         k = x,
-#         bs = 'mrf',
-#         xt = list(polys = zcta_polygons, 
-#                   nb = neighbor_matrix)),
-#     data = df_wout_shape,
-#     method = 'REML',
-#     family = nb())
-#   
-#   model_coefficients <- tidy(model, parametric = T) %>%
-#     mutate(estimate_exp = exp(estimate))
-#   
-#   model_confint <- as_tibble(confint.default(model), rownames = "term") %>%
-#     filter(term=="BWQS_index"|term=="scale(age65_plus)") %>%
-#     mutate(lower_ci = exp(`2.5 %`),
-#            upper_ci = exp(`97.5 %`)) %>%
-#     dplyr::select(-`2.5 %`, -`97.5 %`)
-#   
-#   knots1 <- length(coefficients(model))-2
-#   
-#   model_summaries <- model_coefficients %>%
-#     left_join(., model_confint, by = "term") %>%
-#     mutate(number_knots = knots1) %>%
-#     filter(term != "(Intercept)")
-#   
-#   return(model_summaries)
-# }
-
 ##The code requires you to clone two separate GitHub repositories from our lab. Please clone them into the /code subdirectory:
 ### "https://github.com/justlab/MTA_turnstile.git"
 ### "https://github.com/justlab/Just_universal.git"
