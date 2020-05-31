@@ -17,6 +17,14 @@ library(here)
 here() ##make sure your working directory is above two subfolders, which should be "/code" and "/data"
 #code to make folders if they dont exist??
 
+# data will default to a subfolder "data/" within working directory
+# unless 1. set by an environment variable:
+data.root = Sys.getenv("COVID_DATA")
+# or 2. set with an alternative path here:
+if (data.root == "") data.root = "data"
+if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
+print(paste("data being downloaded into directory", dQuote(data.root)))
+
 #####################################################
 ####               FUNCTIONS                     ####
 #####################################################
