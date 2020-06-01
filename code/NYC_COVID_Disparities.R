@@ -80,7 +80,7 @@ if(!file.exists(here("data", "pluto20v3.csv"))){
 }
 Pluto <- read_csv(here("data", "pluto_20v3.csv"))
 
-Bldg_Footprints <- st_read(here("data", "geo_export_6a2c7bd4-ef0c-4ec6-9c60-e34c8b59cd4a.shp"))
+Bldg_Footprints <- st_read(here("data", "building_footprints", "geo_export_6a2c7bd4-ef0c-4ec6-9c60-e34c8b59cd4a.shp"))
 ZCTA_by_boro <- read_csv("data", "ZCTA_by_boro.csv") #downloaded from https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm
 
 ###Johnathan -- this is where I specifically neeed your help:
