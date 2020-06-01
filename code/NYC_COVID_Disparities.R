@@ -25,9 +25,14 @@ if (data.root == "") data.root = "data"
 if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
 print(paste("data being downloaded into directory", dQuote(data.root)))
 
-#####################################################
-####               FUNCTIONS                     ####
-#####################################################
+####---------------FUNCTIONS---------------------####
+
+##The code requires you to clone two separate GitHub repositories from our lab. Please clone them to be on the same level as this repository:
+### "https://github.com/justlab/MTA_turnstile.git"
+### "https://github.com/justlab/Just_universal.git"
+source("../Just_universal/code/pairmemo.R")
+source("../Just_universal/code/download.R")
+source("../MTA_turnstile/code/mta_turnstile.R")
 
 read_w_filenames <- function(flnm) {
   read_csv(flnm) %>% 
@@ -59,17 +64,22 @@ coalesce_join <- function(x, y,
   dplyr::bind_cols(joined, coalesced)[cols]
 }
 
-##The code requires you to clone two separate GitHub repositories from our lab. Please clone them into the /code subdirectory:
-### "https://github.com/justlab/MTA_turnstile.git"
-### "https://github.com/justlab/Just_universal.git"
+download = function(url, to, f, ...){
+    download.update.meta(data.root, url, to, f, ...)
+}
 
-source(here("code", "MTA_turnstile", "code", "mta_turnstile.R")) ##I just realized if we use here and then they clone the repo, they will need to modify the mta turnstile code...
 
-#############################################
-####              Load Data              ####
-#############################################
+####--------------Load Data--------------####
 
-Pluto <- read_csv(here("data", "pluto_20v2.csv"))  #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
+
+# get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
+if(!file.exists(here("data", "pluto20v3.csv"))){
+  download("https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc_pluto_20v3_csv.zip", 
+                  "pluto_20v3.csv", 
+                  unzip, exdir = here("data"))
+}
+Pluto <- read_csv(here("data", "pluto_20v3.csv"))
+
 Bldg_Footprints <- st_read(here("data", "geo_export_6a2c7bd4-ef0c-4ec6-9c60-e34c8b59cd4a.shp"))
 ZCTA_by_boro <- read_csv("data", "ZCTA_by_boro.csv") #downloaded from https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm
 
@@ -145,9 +155,7 @@ BWQS_stan_model <- here("code", "BWQS", "nb_bwqs_cov.stan")
 
 
 
-#############################################
-#### Census Data Collection and Cleaning ####
-#############################################
+####-Census Data Collection and Cleaning-####
 
 v18 <- load_variables(2018, "acs5", cache = TRUE)
 
@@ -400,9 +408,7 @@ ZCTA_ACS_COVID1 <- ZCTA_ACS_COVID %>%
 
 ### Cleaning done --- Now for the Analysis ###
 
-#####################################################################
 #### Part 1: Creation of BWQS Neighborhood Infection Risk Scores ####
-#####################################################################
 
 #Step 1: Create univariate scatterplots to make sure direction of associations are consistent for all variables, otherwise BWQS is biased
 ggplot(ZCTA_ACS_COVID1, aes(x = testing_ratio, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") #covariate
@@ -621,9 +627,8 @@ ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) 
   ylab("Percentage")+
   xlab("")
 
-#######################################################################################################################
+
 #### Step 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
-#######################################################################################################################
 
 #MTA data is not available everywhere. Data not available in Staten Island, and not every ZCTA has a subway station. 
 
@@ -759,9 +764,7 @@ ggplot() +
   geom_sf(data = included_uhf_shp, fill = "blue1") +
   theme_bw()
 
-###########################################################################
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
-###########################################################################
 
 #Step 1: Create dataframes with the relevant information 
 deaths_by23May2020_by_zcta1 <- deaths_by23May2020_by_zcta %>%
