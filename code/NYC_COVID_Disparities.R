@@ -153,9 +153,18 @@ NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","
                                 boro = c("Bronx","Brooklyn","Queens","Manhattan","Staten Island"), 
                                 full_county = c("Bronx County","Kings County","Queens County","New York County","Richmond County"))
 
-#Johnathan --- can you create scraping code for this too?
-deaths_by23May2020_by_zcta <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/data-by-modzcta.csv")
-modzcta_to_zcta <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/Geography-resources/ZCTA-to-MODZCTA.csv")
+# Download deaths by ZCTA as of May 23rd
+deaths_by23May2020_by_zcta <- download(
+  "https://raw.githubusercontent.com/nychealth/coronavirus-data/8d88b2c06cf6b65676d58b28979731faa10c193c/data-by-modzcta.csv",
+  "2020-05-23_data-by-modzcta.csv",
+  read_csv
+)
+# download MODZCTA to ZCTA crosswalk, current version from repo
+modzcta_to_zcta <- download(
+  "https://raw.githubusercontent.com/nychealth/coronavirus-data/master/Geography-resources/ZCTA-to-MODZCTA.csv",
+  "ZCTA-to-MODZCTA.csv",
+  read_csv
+)
 
 BWQS_stan_model <- here("code", "BWQS", "nb_bwqs_cov.stan")
 
