@@ -126,13 +126,18 @@ UHF_ZipCodes <- UHF_ZipCodes <- download(
             data.frame(code = x[i, 2], name = x[i, 3], zip = as.integer(
                 str_extract_all(x[i, 4], "\\b\\d{5}\\b")[[1]]))))})
 
-UHF_shp <- st_read(here("data", "UHF", "UHF_42_DOHMH_2009.shp"))
-
+UHF_shp <- download(
+    "https://www1.nyc.gov/assets/doh/downloads/zip/uhf42_dohmh_2009.zip",
+    "nyc_uhf_nhoods_shapefile.zip",
+    function(p) read_sf(paste0("/vsizip/", p, "/UHF_42_DOHMH_2009")))
 
 ###Johnathan -- this is on Belle -- make copy here? Should we link to source? -- or use the Healy github covdata
 NYC_basemap_shp <- st_read("/data-belle/basemap/census/counties_esri/dtl_cnty_w_census_NYConly.shp") %>%
   st_transform(., crs = 2263)
-food_retail <- read_csv("/data-coco/COVID_19/Census_data/Retail_Food_Stores.csv") #https://data.ny.gov/Economic-Development/Retail-Food-Stores/9a8c-vfzj
+food_retail <- download(
+    "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
+    "retail_food_stores.csv",
+    read_csv)
 ##may remove unless we use for a supplemental figure
 Google_mobility <- read_csv("/data-coco/COVID_19/activities/Google_2020-05-12_Global_Mobility_Report.csv", col_types = cols(sub_region_2 = col_character()))
 
