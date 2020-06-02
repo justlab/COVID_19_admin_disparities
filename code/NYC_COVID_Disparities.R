@@ -148,6 +148,19 @@ NYC_basemap_shp <- download(
   } 
 )
 
+# ZCTAs from NYC Open Data
+ZCTA_NYC_shp <- download(
+  "https://data.cityofnewyork.us/api/views/i8iw-xf4u/files/YObIR0MbpUVA0EpQzZSq5x55FzKGM2ejSeahdvjqR20?filename=ZIP_CODE_040114.zip",
+  "ZIP_CODE_040114.zip",
+  function(p){
+    unzip(p, exdir = file.path(data.root, "downloads"))
+    st_read(file.path(data.root, "downloads", "ZIP_CODE_040114.shp"), stringsAsFactors = FALSE, quiet = TRUE) %>%
+      st_transform(crs = 2263) %>%
+      rename(zcta = ZIPCODE) %>%
+      filter(zcta %in% ZCTAs_in_NYC)
+  }
+)
+
 food_retail <- download(
     "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
     "retail_food_stores.csv",
@@ -381,12 +394,6 @@ ZCTA_by_boro1 <- ZCTA_by_boro %>%
   filter(!is.na(zcta)) %>%
   mutate(zcta = str_trim(zcta),
          Borough = as.factor(Borough))
-
-ZCTA_NYC_shp <- st_read("/data-belle/basemap/census/zcta/tl_2019_us_zcta510.shp") %>%
-  st_transform(crs = 2263) %>%
-  mutate(zcta = as.character(ZCTA5CE10)) %>%
-  filter(zcta %in% ZCTAs_in_NYC)
-
 
 #### COVID Tests  ####
 
