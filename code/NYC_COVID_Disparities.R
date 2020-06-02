@@ -12,6 +12,7 @@ library(broom)
 library(MASS)
 library(spatialreg)
 library(here)
+library(pdftools)
 
 
 here() ##make sure your working directory is above two subfolders, which should be "/code" and "/data"
@@ -106,13 +107,25 @@ ZCTA_test_series <- list.files(path = "/data-coco/COVID_19/NYCDOH/zcta_test_snap
   dplyr::select(-filename)
 ZCTAs_in_NYC <- as.character(unique(ZCTA_test_series$MODZCTA))
 
-NYS_Testing_Data_County <- read_csv(here("data", "New_York_State_Statewide_COVID-19_Testing.csv")) #https://health.data.ny.gov/Health/New-York-State-Statewide-COVID-19-Testing/xdss-u53e
+NYS_Testing_Data_County <- download(
+    "https://health.data.ny.gov/api/views/xdss-u53e/rows.csv",
+    "nys_covid19_testing.csv",
+    read_csv)
 
 Subway_ridership_by_UHF <- relative.subway.usage(2020L, "nhood")
 Subway_ridership_by_Boro <- relative.subway.usage(2020L, "boro")
 Subway_ridership_by_ZCTA <- relative.subway.usage(2020L, "zcta")
 
-UHF_ZipCodes <- read_csv(here("data", "UHF", "UHF_ZipCodes.csv")) #copied and pasted and cleaned from this pdf: http://www.infoshare.org/misc/UHF.pdf
+UHF_ZipCodes <- UHF_ZipCodes <- download(
+    "http://www.infoshare.org/misc/UHF.pdf",
+    "uhf_zips.pdf",
+    function(p)
+       {x = str_match_all(pdf_text(p)[2],
+            "(\\d+)\\s+(\\S.+?\\S)\\s*([0-9,]+)")[[1]]
+        do.call(rbind, lapply(1 : nrow(x), function(i)
+            data.frame(code = x[i, 2], name = x[i, 3], zip = as.integer(
+                str_extract_all(x[i, 4], "\\b\\d{5}\\b")[[1]]))))})
+
 UHF_shp <- st_read(here("data", "UHF", "UHF_42_DOHMH_2009.shp"))
 
 
