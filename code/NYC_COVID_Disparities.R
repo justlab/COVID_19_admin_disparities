@@ -79,8 +79,25 @@ Pluto = download(
     function(p)
         read_csv(unz(p, "pluto_20v3.csv")))
 
-Bldg_Footprints <- st_read(here("data", "building_footprints", "geo_export_6a2c7bd4-ef0c-4ec6-9c60-e34c8b59cd4a.shp"))
-ZCTA_by_boro <- read_csv("data", "ZCTA_by_boro.csv") #downloaded from https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm
+Bldg_Footprints <- download(
+  # https://data.cityofnewyork.us/Housing-Development/Building-Footprints/nqwf-w8eh
+    "https://data.cityofnewyork.us/api/geospatial/utk2-gkjy?method=export&format=Shapefile",
+    "building_footprints.zip",
+    function(p)
+        st_read(paste0("/vsizip/", p)))
+
+ZCTA_by_boro <- download(
+    "https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm",
+    "uhf_neighborhoods.html",
+    function(p)
+       {# XML::readHTMLTable doesn't identify the columns correctly.
+        x = str_match_all(read_file(p), regex(dotall = T, paste0(
+            '<td headers="header1"[^>]+>\\s*(.+?)</td>',
+            '(.+?)',
+            '(?=<td headers="header1"|</table>)')))[[1]]
+        do.call(rbind, lapply(1 : nrow(x), function(i)
+            data.frame(boro = x[i, 2], zip = as.integer(
+                str_extract_all(x[i, 3], "\\b\\d{5}\\b")[[1]]))))})
 
 ###Johnathan -- this is where I specifically neeed your help:
 ZCTA_test_series <- list.files(path = "/data-coco/COVID_19/NYCDOH/zcta_test_snapshots/", pattern = "*.csv", full.names = TRUE) %>% 
