@@ -73,10 +73,11 @@ download = function(url, to, f, ...){
 
 
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
-download("https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc_pluto_20v3_csv.zip", 
-                  "pluto_20v3.csv", 
-                  unzip, exdir = here("data", "downloads"))
-Pluto <- read_csv(here("data", "pluto_20v3.csv"))
+Pluto = download(
+    "https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc_pluto_20v3_csv.zip",
+    "pluto.zip",
+    function(p)
+        read_csv(unz(p, "pluto_20v3.csv")))
 
 Bldg_Footprints <- st_read(here("data", "building_footprints", "geo_export_6a2c7bd4-ef0c-4ec6-9c60-e34c8b59cd4a.shp"))
 ZCTA_by_boro <- read_csv("data", "ZCTA_by_boro.csv") #downloaded from https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm
