@@ -100,8 +100,13 @@ ZCTA_by_boro <- download(
             data.frame(boro = x[i, 2], zip = as.integer(
                 str_extract_all(x[i, 3], "\\b\\d{5}\\b")[[1]]))))})
 
-###Johnathan -- this is where I specifically neeed your help:
-ZCTA_test_series <- list.files(path = "/data-coco/COVID_19/NYCDOH/zcta_test_snapshots/", pattern = "*.csv", full.names = TRUE) %>% 
+# Download the specific day of test results by ZCTA being used
+ZCTA_test_download <- download(
+  "https://raw.githubusercontent.com/nychealth/coronavirus-data/6d7c4a94d6472a9ffc061166d099a4e5d89cd3e3/tests-by-zcta.csv",
+  "2020-05-07_tests-by-zcta.csv",
+  identity
+)
+ZCTA_test_series <- ZCTA_test_download %>% 
   map_df(~read_w_filenames(.)) %>%
   mutate(date = as.Date(str_extract(filename, "[:digit:]{4}-[:digit:]{2}-[:digit:]{2}"))) %>%
   dplyr::select(-filename)
@@ -367,7 +372,7 @@ ZCTA_NYC_shp <- st_read("/data-belle/basemap/census/zcta/tl_2019_us_zcta510.shp"
 
 #### COVID Tests  ####
 
-May7_tests <- ZCTA_test_series1 %>%
+May7_tests <- ZCTA_test_series %>%
   filter(date=="2020-05-07")
 
 ZCTA_NYC_shp %>%
