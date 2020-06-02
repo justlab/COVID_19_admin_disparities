@@ -136,9 +136,18 @@ UHF_shp <- download(
     "nyc_uhf_nhoods_shapefile.zip",
     function(p) read_sf(paste0("/vsizip/", p, "/UHF_42_DOHMH_2009")))
 
-###Johnathan -- this is on Belle -- make copy here? Should we link to source? -- or use the Healy github covdata
-NYC_basemap_shp <- st_read("/data-belle/basemap/census/counties_esri/dtl_cnty_w_census_NYConly.shp") %>%
-  st_transform(., crs = 2263)
+# NYC boroughs from NYC Open Data
+NYC_basemap_shp <- download(
+  "https://data.cityofnewyork.us/api/geospatial/tqmj-j8zm?method=export&format=Shapefile",
+  "Borough_Boundaries.zip",
+  function(p){
+    unzip(p, exdir = file.path(data.root, "downloads"))
+    # open data platform generates a random UUID for every download
+    ufile = list.files(file.path(data.root, "downloads"), pattern = "geo_export_.*\\.shp", full.names = TRUE)
+    st_read(ufile, stringsAsFactors = FALSE, quiet = TRUE) %>% st_transform(., crs = 2263)
+  } 
+)
+
 food_retail <- download(
     "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
     "retail_food_stores.csv",
