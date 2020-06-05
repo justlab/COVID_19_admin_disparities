@@ -1,10 +1,11 @@
+#CRAN packages:
 library(tidyverse)
 library(sf)
 library(lubridate)
 library(tidycensus)
 library(GGally)
 library(rstan)
-library(BWQS)
+# library(BWQS)
 library(drc)
 library(spdep)
 library(mgcv)
@@ -13,10 +14,11 @@ library(MASS)
 library(spatialreg)
 library(here)
 library(pdftools)
-
+#Github packages available via "justlab/Just_universal" and "justlab/MTA_turnstile
+library(Just.universal) 
+library(MTA.turnstile)
 
 here() ##make sure your working directory is above two subfolders, which should be "/code" and "/data"
-#code to make folders if they dont exist??
 
 # data will default to a subfolder "data/" within working directory
 # unless 1. set by an environment variable:
@@ -25,44 +27,59 @@ data.root = Sys.getenv("COVID_DATA")
 if (data.root == "") data.root = "data"
 if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
 print(paste("data being downloaded into directory", dQuote(data.root)))
+MTA_TURNSTILE_DATA_DIR = here("data")
 
 ####---------------FUNCTIONS---------------------####
 
-##The code requires you to clone two separate GitHub repositories from our lab. Please clone them to be on the same level as this repository:
-### "https://github.com/justlab/MTA_turnstile.git"
-### "https://github.com/justlab/Just_universal.git"
-source("../Just_universal/code/pairmemo.R")
-source("../Just_universal/code/download.R")
-source("../MTA_turnstile/code/mta_turnstile.R")
-
 read_w_filenames <- function(flnm) {
-  read_csv(flnm) %>% 
+  read_csv(flnm) %>%
     mutate(filename = flnm)
 }
 
-coalesce_join <- function(x, y, 
-                          by = NULL, suffix = c(".x", ".y"), 
-                          join = dplyr::full_join, ...) {
-  joined <- join(x, y, by = by, suffix = suffix, ...)
-  # names of desired output
-  cols <- union(names(x), names(y))
-  
-  to_coalesce <- names(joined)[!names(joined) %in% cols]
-  suffix_used <- suffix[ifelse(endsWith(to_coalesce, suffix[1]), 1, 2)]
-  # remove suffixes and deduplicate
-  to_coalesce <- unique(substr(
-    to_coalesce, 
-    1, 
-    nchar(to_coalesce) - nchar(suffix_used)
-  ))
-  
-  coalesced <- purrr::map_dfc(to_coalesce, ~dplyr::coalesce(
-    joined[[paste0(.x, suffix[1])]], 
-    joined[[paste0(.x, suffix[2])]]
-  ))
-  names(coalesced) <- to_coalesce
-  
-  dplyr::bind_cols(joined, coalesced)[cols]
+##Kodi -- can you make this function work to extract the WAIC of the model?
+extract_waic <- function (stanfit){ #doesnt currently work
+  log_lik <- extract(stanfit, "log_lik")$log_lik
+  dim(log_lik) <- if (length(dim(log_lik)) == 1) 
+    c(length(log_lik), 1)
+  else c(dim(log_lik)[1], prod(dim(log_lik)[2:length(dim(log_lik))]))
+  S <- nrow(log_lik)
+  n <- ncol(log_lik)
+  lpd <- log(colMeans(exp(log_lik)))
+  p_waic <- colVars(log_lik)
+  elpd_waic <- lpd - p_waic
+  waic <- -2 * elpd_waic
+  loo_weights_raw <- 1/exp(log_lik - max(log_lik))
+  loo_weights_normalized <- loo_weights_raw/matrix(colMeans(loo_weights_raw), 
+                                                   nrow = S, ncol = n, byrow = TRUE)
+  loo_weights_regularized <- pmin(loo_weights_normalized, sqrt(S))
+  elpd_loo <- log(colMeans(exp(log_lik) * loo_weights_regularized)/colMeans(loo_weights_regularized))
+  p_loo <- lpd - elpd_loo
+  pointwise <- cbind(waic, lpd, p_waic, elpd_waic, p_loo, elpd_loo)
+  total <- colSums(pointwise)
+  se <- sqrt(n * colVars(pointwise))
+  return(list(waic = total["waic"], elpd_waic = total["elpd_waic"], 
+              p_waic = total["p_waic"], elpd_loo = total["elpd_loo"], 
+              p_loo = total["p_loo"]))
+}
+
+quantile_split <- function (data, mix_name = mix_name, q, shift = TRUE) {
+  if (shift) {
+    for (i in 1:length(mix_name)) {
+      dat_num = as.numeric(unlist(data[, mix_name[i]]))
+      data[[mix_name[i]]] = cut(dat_num, breaks = unique(quantile(dat_num, 
+                                                                  probs = seq(0, 1, by = 1/q), na.rm = TRUE)), 
+                                labels = FALSE, include.lowest = TRUE) - 1
+    }
+  }
+  else {
+    for (i in 1:length(mix_name)) {
+      dat_num = as.numeric(unlist(data[, mix_name[i]]))
+      data[[mix_name[i]]] = cut(dat_num, breaks = unique(quantile(dat_num, 
+                                                                  probs = seq(0, 1, by = 1/q), na.rm = TRUE)), 
+                                labels = FALSE, include.lowest = TRUE)
+    }
+  }
+  return(data)
 }
 
 download = function(url, to, f, ...){
@@ -106,21 +123,19 @@ ZCTA_test_download <- download(
   "2020-05-07_tests-by-zcta.csv",
   identity
 )
+
+#Download testing data 
 ZCTA_test_series <- ZCTA_test_download %>% 
   map_df(~read_w_filenames(.)) %>%
   mutate(date = as.Date(str_extract(filename, "[:digit:]{4}-[:digit:]{2}-[:digit:]{2}"))) %>%
   dplyr::select(-filename)
+
 ZCTAs_in_NYC <- as.character(unique(ZCTA_test_series$MODZCTA))
 
-NYS_Testing_Data_County <- download(
-    "https://health.data.ny.gov/api/views/xdss-u53e/rows.csv",
-    "nys_covid19_testing.csv",
-    read_csv)
-
+##Subway ridership data
 Subway_ridership_by_UHF <- relative.subway.usage(2020L, "nhood")
-Subway_ridership_by_Boro <- relative.subway.usage(2020L, "boro")
-Subway_ridership_by_ZCTA <- relative.subway.usage(2020L, "zcta")
 
+#UHF definitions by zip codes
 UHF_ZipCodes <- UHF_ZipCodes <- download(
     "http://www.infoshare.org/misc/UHF.pdf",
     "uhf_zips.pdf",
@@ -131,6 +146,7 @@ UHF_ZipCodes <- UHF_ZipCodes <- download(
             data.frame(code = x[i, 2], name = x[i, 3], zip = as.integer(
                 str_extract_all(x[i, 4], "\\b\\d{5}\\b")[[1]]))))})
 
+#UHF shapefile 
 UHF_shp <- download(
     "https://www1.nyc.gov/assets/doh/downloads/zip/uhf42_dohmh_2009.zip",
     "nyc_uhf_nhoods_shapefile.zip",
@@ -148,32 +164,18 @@ NYC_basemap_shp <- download(
   } 
 )
 
-# ZCTAs from NYC Open Data
-ZCTA_NYC_shp <- download(
-  "https://data.cityofnewyork.us/api/views/i8iw-xf4u/files/YObIR0MbpUVA0EpQzZSq5x55FzKGM2ejSeahdvjqR20?filename=ZIP_CODE_040114.zip",
-  "ZIP_CODE_040114.zip",
-  function(p){
-    unzip(p, exdir = file.path(data.root, "downloads"))
-    st_read(file.path(data.root, "downloads", "ZIP_CODE_040114.shp"), stringsAsFactors = FALSE, quiet = TRUE) %>%
-      st_transform(crs = 2263) %>%
-      rename(zcta = ZIPCODE) %>%
-      filter(zcta %in% ZCTAs_in_NYC)
-  }
+#DOHMH MODZCTA Shapefile
+MODZCTA_NYC_shp <- download(
+  "https://data.cityofnewyork.us/api/geospatial/pri4-ifjk?method=export&format=Shapefile",
+  "Modified Zip Code Tabulation Areas (MODZCTA).zip", 
+  function(p) read_sf(paste0("/vsizip/", p))
 )
 
+#Food outlets 
 food_retail <- download(
     "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
     "retail_food_stores.csv",
     read_csv)
-##may remove unless we use for a supplemental figure
-Google_mobility <- read_csv("/data-coco/COVID_19/activities/Google_2020-05-12_Global_Mobility_Report.csv", col_types = cols(sub_region_2 = col_character()))
-
-##We have many sources of data, so these just help to combine the various data types
-NYC_counties1 <- c("Bronx","Kings","Queens","New York","Richmond")
-NYC_counties1_full <- c("Bronx County","Kings County","Queens County","New York County","Richmond County")
-NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","Richmond"), 
-                                boro = c("Bronx","Brooklyn","Queens","Manhattan","Staten Island"), 
-                                full_county = c("Bronx County","Kings County","Queens County","New York County","Richmond County"))
 
 # Download deaths by ZCTA as of May 23rd
 deaths_by23May2020_by_zcta <- download(
@@ -188,51 +190,26 @@ modzcta_to_zcta <- download(
   read_csv
 )
 
-BWQS_stan_model <- here("code", "BWQS", "nb_bwqs_cov.stan")
+##We have many sources of data, so these just help to combine the various data types
+NYC_counties1 <- c("Bronx","Kings","Queens","New York","Richmond")
+NYC_counties1_full <- c("Bronx County","Kings County","Queens County","New York County","Richmond County")
+NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","Richmond"), 
+                                boro = c("Bronx","Brooklyn","Queens","Manhattan","Staten Island"), 
+                                full_county = c("Bronx County","Kings County","Queens County","New York County","Richmond County"))
 
-# #ZCTA_tests <- read_csv(url("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/tests-by-zcta.csv"))
-# ##Old
-# Pluto <- read_csv("/data-coco/COVID_19/Census_data/pluto_20v2.csv")  #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
-# Bldg_Footprints <- st_read("/data-coco/COVID_19/Census_data/building_footprints/geo_export_6a2c7bd4-ef0c-4ec6-9c60-e34c8b59cd4a.shp")
-# ZCTA_by_boro <- read_csv("/data-coco/COVID_19/Census_data/ZCTA_by_boro.csv") #downloaded from https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm
-# ZCTA_test_series <- list.files(path = "/data-coco/COVID_19/NYCDOH/zcta_test_snapshots/", pattern = "*.csv", full.names = TRUE) %>% 
-#   map_df(~read_w_filenames(.)) %>%
-#   mutate(date = as.Date(str_extract(filename, "[:digit:]{4}-[:digit:]{2}-[:digit:]{2}"))) %>%
-#   dplyr::select(-filename)
-# ZCTAs_in_NYC <- as.character(unique(ZCTA_test_series$MODZCTA))
-# 
-# NYS_Testing_Data_County <- read_csv("/data-coco/COVID_19/Census_data/New_York_State_Statewide_COVID-19_Testing.csv") #https://health.data.ny.gov/Health/New-York-State-Statewide-COVID-19-Testing/xdss-u53e
-# 
-# Subway_ridership_by_UHF <- relative.subway.usage(2020L, "nhood")
-# Subway_ridership_by_Boro <- relative.subway.usage(2020L, "boro")
-# Subway_ridership_by_ZCTA <- relative.subway.usage(2020L, "zcta")
-# 
-# UHF_ZipCodes <- read_csv("/data-coco/COVID_19/Census_data/UHF/UHF_ZipCodes.csv")
-# UHF_shp <- st_read("/data-coco/COVID_19/Census_data/UHF/UHF_42_DOHMH_2009.shp")
-# NYC_basemap_shp <- st_read("/data-belle/basemap/census/counties_esri/dtl_cnty_w_census_NYConly.shp") %>%
-#   st_transform(., crs = 2263)
-# food_retail <- read_csv("/data-coco/COVID_19/Census_data/Retail_Food_Stores.csv") #https://data.ny.gov/Economic-Development/Retail-Food-Stores/9a8c-vfzj
-# Google_mobility <- read_csv("/data-coco/COVID_19/activities/Google_2020-05-12_Global_Mobility_Report.csv", col_types = cols(sub_region_2 = col_character()))
-# 
-# 
-# NYC_counties1 <- c("Bronx","Kings","Queens","New York","Richmond")
-# NYC_counties1_full <- c("Bronx County","Kings County","Queens County","New York County","Richmond County")
-# NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","Richmond"), 
-#                                 boro = c("Bronx","Brooklyn","Queens","Manhattan","Staten Island"), 
-#                                 full_county = c("Bronx County","Kings County","Queens County","New York County","Richmond County"))
-# deaths_by23May2020_by_zcta <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/data-by-modzcta.csv")
-# modzcta_to_zcta <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/Geography-resources/ZCTA-to-MODZCTA.csv")
+#upload the stan code alongside the disparities code 
+BWQS_stan_model <- here("code", "nb_bwqs_cov.stan") 
 
 
 
 ####-Census Data Collection and Cleaning-####
 
-v18 <- load_variables(2018, "acs5", cache = TRUE)
+#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
 
 ACS_Data <- get_acs(geography = "zcta", 
         variables = c(medincome = "B19013_001",
                       total_pop1 = "B01003_001",
-                      fpl_100 = "B06012_002", #add these 2 to get
+                      fpl_100 = "B06012_002", 
                       fpl_100to150 = "B06012_003",
                       median_rent = "B25031_001",
                       total_hholds1 = "B22003_001",
@@ -271,21 +248,12 @@ ACS_Data <- get_acs(geography = "zcta",
                       nonhispLat_black_raceethnic = "B03002_004",
                       nonhispLat_amerindian_raceethnic = "B03002_005",
                       nonhispLat_asian_raceethnic = "B03002_006",
-                      crowding_1to1.5_own = "B25014_005",
-                      crowding_1.5to2_own = "B25014_006",
-                      crowding_2up_own = "B25014_007",
-                      crowding_1to1.5_rent = "B25014_011",
-                      crowding_1.5to2_rent = "B25014_012", 
-                      crowding_2up_rent = "B25014_013",
-                      crowding_homes_total = "B25014_001",
-                      age65_plus  = "B08101_008",
-                      amt_nonEnglish_speakers1 = "B08113_005",
-                      amt_nonEnglish_speakers2 ="B08113_008"),
+                      age65_plus  = "B08101_008"),
         year = 2018,
         output = "wide",
         survey = "acs5")
 
-ACS_Data1 <- ACS_Data %>% #pull out only ACS estimates and put in tidy format 
+ACS_Data1 <- ACS_Data %>% #only pull out the estimates and cleaning variable names
   filter(GEOID %in% ZCTAs_in_NYC) %>%
   dplyr::select(-NAME)  %>%
   dplyr::select(GEOID, !ends_with("M")) %>%
@@ -294,18 +262,14 @@ ACS_Data1 <- ACS_Data %>% #pull out only ACS estimates and put in tidy format
 
 ACS_Data2 <- ACS_Data1 %>%
   mutate_at(vars(ends_with("_commute")), ~round((./total_commute1)*100, 2)) %>% #proportion of people relying on a given mode of transit
-  mutate_at(vars(ends_with("_raceethnic")), ~round((./total_pop1)*100, 2)) %>% #proportion of ppl reporting a race/ethncity 
-  mutate(not_insured = round(((under19_noinsurance + age19_34_noinsurance + age35_64_noinsurance + age65plus_noinsurance) / total_pop1)*100, 2),
-         snap_hholds = round((hholds_snap/total_hholds1)*100, 2),
-         fpl_150 = round(((fpl_100+fpl_100to150)/total_pop1)*100, 2),
-         unemployed = round((unemployed/over16total_industry1)*100, 2),
+  mutate_at(vars(ends_with("_raceethnic")), ~round((./total_pop1)*100, 2)) %>% #proportion of ppl reporting a given race/ethncity 
+  mutate(not_insured = round(((under19_noinsurance + age19_34_noinsurance + age35_64_noinsurance + age65plus_noinsurance) / total_pop1)*100, 2), #proportion uninsured
+         snap_hholds = round((hholds_snap/total_hholds1)*100, 2), #proportion relying on SNAP
+         fpl_150 = round(((fpl_100+fpl_100to150)/total_pop1)*100, 2), #proportion 150% or less of FPL
+         unemployed = round((unemployed/over16total_industry1)*100, 2), #proportion unemployed
          not_quarantined_jobs = round(((ag_industry+(construct_industry*.25)+wholesaletrade_industry+ #an estimate of who is still leaving the house for work based on industry
-                                        (edu_health_socasst_industry*.5)+transpo_and_utilities_industry)/over16total_industry1)*100, 2),
-         crowded_housing = round(((crowding_1to1.5_own + crowding_1.5to2_own + crowding_2up_own + crowding_1to1.5_own + 
-           crowding_1.5to2_own + crowding_2up_own)/crowding_homes_total)*100, 2),
-         prop_linguistic_isolation = round(((amt_nonEnglish_speakers1 + amt_nonEnglish_speakers2)/total_pop1)*100, 2)) %>%
-  dplyr::select(-ends_with("_noinsurance"), -fpl_100, -fpl_100to150, -ends_with("_industry"), -hholds_snap, -starts_with("crowding"), 
-                -starts_with("amt_nonEnglish")) %>%
+                                        (edu_health_socasst_industry*.5)+transpo_and_utilities_industry)/over16total_industry1)*100, 2)) %>%
+  dplyr::select(-ends_with("_noinsurance"), -fpl_100, -fpl_100to150, -ends_with("_industry"), -hholds_snap) %>%
   rename(zcta = "GEOID")
 
 
@@ -313,19 +277,14 @@ ACS_Data2 <- ACS_Data1 %>%
 
 ACS_EssentialWrkr_Commute <- get_acs(geography = "zcta", #pull down the relevant categories 
                                      variables = c(ag_car1_commute = "B08126_017",
-                                                   ag_car2_commute = "B08126_032",
                                                    ag_pubtrans_commute = "B08126_047",
                                                    construct_car1_commute ="B08126_018",
-                                                   construct_car2_commute = "B08126_033",
                                                    construct_pubtrans_commute = "B08126_048",
                                                    wholesale_car1_commute = "B08126_020",
-                                                   wholesale_car2_commute = "B08126_033",
                                                    wholesale_pubtrans_commute = "B08126_050",
                                                    transpo_car1_commute = "B08126_022",
-                                                   transpo_car2_commute = "B08126_037",
                                                    transpo_pubtrans_commute = "B08126_052",
                                                    ed_hlthcare_car1_commute = "B08126_026",
-                                                   ed_hlthcare_car2_commute = "B08126_041",
                                                    ed_hlthcare_pubtrans_commute = "B08126_056"),
                                      year = 2018, 
                                      output = "wide",
@@ -337,7 +296,7 @@ ACS_EssentialWrkr_Commute1 <- ACS_EssentialWrkr_Commute %>% #clean data and aggr
   filter(GEOID %in% ZCTAs_in_NYC) %>%
   mutate_at(vars(starts_with("ed_hlthcare")), ~round(./2), 0) %>% #maintain same proportions as estimated nonquarintined jobs
   mutate_at(vars(starts_with("construct")), ~round(./4), 0) %>%
-  mutate(essentialworker_drove = rowSums(dplyr::select(., 2,3,5,6,8,10,11,13,14)),
+  mutate(essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))), 
          essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
   rename(zcta = GEOID) %>%
   dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans)
@@ -386,24 +345,31 @@ Res_Bldg_Footprints <- Bldg_Footprints %>%
   group_by(zcta) %>%
   summarise(total_res_volume_zcta = sum(res_volume, na.rm = TRUE)) 
 
-ZCTA_by_boro1 <- ZCTA_by_boro %>%
-  fill(., Borough, .direction = "down") %>%
-  separate(col = `ZIP Codes`, into = c("1", "2", "3", "4", "5", "6", "7"), sep = ",") %>%
-  gather(key = zcta1, value = zcta, 1:7, -Borough) %>%
-  dplyr::select(1, 4) %>%
-  filter(!is.na(zcta)) %>%
-  mutate(zcta = str_trim(zcta),
-         Borough = as.factor(Borough))
+
 
 #### COVID Tests  ####
+MODZCTA_NYC_shp1 <- MODZCTA_NYC_shp %>%
+  dplyr::select(modzcta, geometry) %>%
+  rename("zcta" = "modzcta")
 
 May7_tests <- ZCTA_test_series %>%
-  filter(date=="2020-05-07")
+  filter(date=="2020-05-07") %>%
+  mutate(zcta = as.character(MODZCTA)) %>%
+  rename(total_tests = "Total") %>%
+  dplyr::select(zcta, date, Positive, total_tests)
 
-ZCTA_NYC_shp %>%
-  mutate(zcta = as.character(ZCTA5CE10)) %>%
+ZCTA_by_boro1 <- ZCTA_by_boro %>%
+  mutate(boro = as.character(boro),
+         zcta = as.character(zip)) %>%
+  dplyr::select(-zip) %>%
+  bind_rows(., 
+            tibble(boro = as.character(c("Manhattan", "Manhattan" ,"Queens")), #correcting nas
+                     zcta = as.character(c("10069", "10282", "11109"))))
+
+MODZCTA_NYC_shp1 %>%
   left_join(., May7_tests, by = "zcta") %>%
   left_join(., ACS_Data2, by = "zcta") %>%
+  filter(zcta != "99999") %>%
   mutate(pos_per_100000 = (Positive/total_pop1)*100000) %>%
   ggplot() +
   geom_sf(data = NYC_basemap_shp)+
@@ -414,13 +380,12 @@ ZCTA_NYC_shp %>%
   theme_bw() +
   theme_bw(base_size = 15) + 
   theme(legend.title = element_text(face = "bold"), legend.position = c(0.25, 0.8))
-
+ 
 
 
 #### Create data frames of all above information ####
 
-ZCTA_ACS_COVID_shp <- ZCTA_NYC_shp %>%
-  mutate(zcta = as.character(ZCTA5CE10)) %>%
+ZCTA_ACS_COVID_shp <- MODZCTA_NYC_shp1 %>%
   st_transform(., crs = 2263) %>%
   dplyr::select(zcta, geometry) %>%
   left_join(., ACS_Data2, by = "zcta") %>%
@@ -431,105 +396,81 @@ ZCTA_ACS_COVID_shp <- ZCTA_NYC_shp %>%
   mutate(pop_density = as.numeric(total_pop1/st_area(geometry)),
          avg_hhold_size = round((total_pop1/total_hholds1), 2),
          pos_per_100000 = (Positive/total_pop1)*100000,
-         testing_ratio = (Total_tests/total_pop1),
-         res_vol_zctadensity = as.numeric(total_res_volume_zcta/st_area(geometry)), #maybe make a ppl per res volume?
+         testing_ratio = (total_tests/total_pop1),
+         res_vol_zctadensity = as.numeric(total_res_volume_zcta/st_area(geometry)), 
          res_vol_popdensity = as.numeric(total_pop1/total_res_volume_zcta),
          pubtrans_ferrysubway_commute = pubtrans_subway_commute + pubtrans_ferry_commute,
          grocers = replace_na(grocers, 0),
-         grocers_per_1000 = (grocers/total_pop1)*1000) %>%
+         grocers_per_1000 = (grocers/total_pop1)*1000,
+         pos_per_100000 = round(pos_per_100000, 0),
+         valid_var = "0",
+         didnot_workhome_commute = 1/workhome_commute,
+         one_over_grocers_per_1000 = if_else(is.infinite(1/grocers_per_1000), 0, 1/grocers_per_1000),
+         one_over_medincome = 1/medincome) %>%
   dplyr::select(-pubtrans_subway_commute, -pubtrans_ferry_commute) %>%
   left_join(., ZCTA_by_boro1, by = "zcta") %>%
-  mutate_at(vars(starts_with("essentialworker_")), ~round((./over16total_industry1)*100, 2))
-
-
-#add the square footage of housing/zcta 
+  mutate_at(vars(starts_with("essentialworker_")), ~round((./over16total_industry1)*100, 2)) %>%
+  filter(zcta != "99999") #remove na
 
 ZCTA_ACS_COVID <- ZCTA_ACS_COVID_shp %>%
-  st_set_geometry(., NULL)
+  st_set_geometry(., NULL) #remove geometry
 
 #any missing data?
 ZCTA_ACS_COVID %>% 
   select_if(function(x) any(is.na(x))) %>% 
   summarise_each(funs(sum(is.na(.))))
 
-#only 1 NA -- median rent in location. gonna impute with a regression. 
-ggplot(ZCTA_ACS_COVID, aes(x = medincome, y = median_rent)) + geom_point() + geom_smooth(method = "lm")
-lm_medianrent_impute <- lm(median_rent ~ medincome, data = ZCTA_ACS_COVID)
-predict.lm(lm_medianrent_impute, newdata = data.frame(medincome = 103580)) #rent = 2001
-
-ZCTA_ACS_COVID1 <- ZCTA_ACS_COVID %>%
-  mutate(median_rent = if_else(is.na(median_rent), 2001, median_rent),
-         pos_per_100000 = round(pos_per_100000, 0),
-         #tests_per_10000 = (Total/total_pop1)*10000,
-         valid_var = "0",
-         didnot_walk_commute = 100-walked_commute,
-         didnot_workhome_commute = 100-workhome_commute,
-         didnot_pubtrans_ferrysubway_commute = 100-pubtrans_ferrysubway_commute,
-         prop_rent_of_income = round((median_rent/medincome)*100, 2),
-         one_over_grocers_per_1000 = if_else(is.infinite(1/grocers_per_1000), 0, 1/grocers_per_1000),
-         one_over_medincome = 1/medincome,
-         one_over_rent = 1/median_rent)
 
 ### Cleaning done --- Now for the Analysis ###
 
 #### Part 1: Creation of BWQS Neighborhood Infection Risk Scores ####
 
 #Step 1: Create univariate scatterplots to make sure direction of associations are consistent for all variables, otherwise BWQS is biased
-ggplot(ZCTA_ACS_COVID1, aes(x = testing_ratio, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") #covariate
-ggplot(ZCTA_ACS_COVID1, aes(x = prop_linguistic_isolation, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
-ggplot(ZCTA_ACS_COVID1, aes(x = one_over_medincome, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
-ggplot(ZCTA_ACS_COVID1, aes(x = unemployed, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = drove_commute, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = pubtrans_bus_commute, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = res_vol_popdensity, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = didnot_workhome_commute, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = not_insured, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = snap_hholds, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = fpl_150, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = not_quarantined_jobs, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = avg_hhold_size, y = pos_per_10000)) + geom_point() + geom_smooth(method = "lm")
-ggplot(ZCTA_ACS_COVID1, aes(x = essentialworker_drove, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = essentialworker_pubtrans, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = one_over_medincome, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID1, aes(x = one_over_grocers_per_1000, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")  
-ggplot(ZCTA_ACS_COVID1, aes(x = crowded_housing, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
+ggplot(ZCTA_ACS_COVID, aes(x = testing_ratio, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") #covariate
+ggplot(ZCTA_ACS_COVID, aes(x = one_over_medincome, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
+ggplot(ZCTA_ACS_COVID, aes(x = not_insured, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
+ggplot(ZCTA_ACS_COVID, aes(x = one_over_grocers_per_1000, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
+ggplot(ZCTA_ACS_COVID, aes(x = unemployed, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
+ggplot(ZCTA_ACS_COVID, aes(x = res_vol_popdensity, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
+ggplot(ZCTA_ACS_COVID, aes(x = didnot_workhome_commute, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
+ggplot(ZCTA_ACS_COVID, aes(x = not_quarantined_jobs, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
+ggplot(ZCTA_ACS_COVID, aes(x = avg_hhold_size, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
+ggplot(ZCTA_ACS_COVID, aes(x = essentialworker_drove, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
+ggplot(ZCTA_ACS_COVID, aes(x = essentialworker_pubtrans, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
 
-
-SES_vars <- names(ZCTA_ACS_COVID1 %>% dplyr::select(one_over_medincome, not_insured, one_over_grocers_per_1000, unemployed, 
+  
+SES_vars <- names(ZCTA_ACS_COVID %>% dplyr::select(one_over_medincome, not_insured, one_over_grocers_per_1000, unemployed, 
                                                     not_quarantined_jobs, essentialworker_pubtrans, essentialworker_drove, 
                                                     didnot_workhome_commute, res_vol_popdensity, avg_hhold_size))
 
 #Step 2a: Visualize relationships between explanatory variables to make sure nothing >0.9 correlation, as this could bias BWQS
-ggpairs(ZCTA_ACS_COVID1, columns = SES_vars) 
+ggpairs(ZCTA_ACS_COVID, columns = SES_vars) 
 
 ## Step 2b: Examine Univariable spearman associations for all selected variables with the outcome  
 bind_cols(Variables = SES_vars,
           
-        ZCTA_ACS_COVID1 %>%
+        ZCTA_ACS_COVID %>%
             dplyr::select(all_of(SES_vars), pos_per_100000) %>%
             summarise_at(vars(all_of(SES_vars)), list(~cor(., pos_per_100000, method = "kendall"))) %>%
             t() %>%
-            as.tibble(),
+            as_tibble(),
         
-        ZCTA_ACS_COVID1 %>%
+        ZCTA_ACS_COVID %>%
           dplyr::select(all_of(SES_vars), pos_per_100000) %>%
           summarise_at(vars(all_of(SES_vars)), 
                        list(~cor.test(., pos_per_100000, method = "kendall")$p.value)) %>%
           t() %>%
-          as.tibble()) %>%
+          as_tibble()) %>%
   
   mutate(`Correlation (Tau)` = round(V1, 3),
          `p value` = as.character(ifelse(V11 < 0.0001, "< 0.0001", round(V11, 3))),) %>%
-  dplyr::select(-V1, -V11) #%>%
-  # kable %>%
-  # kable_styling()
-
+  dplyr::select(-V1, -V11) 
 
 #Step 3: Prepare data for BWQS and pass to stan for model fitting 
-y = as.numeric(ZCTA_ACS_COVID1$pos_per_100000)
-X <- ZCTA_ACS_COVID1 %>%
+y = as.numeric(ZCTA_ACS_COVID$pos_per_100000)
+X <- ZCTA_ACS_COVID %>%
   dplyr::select(all_of(SES_vars))
-K <- ZCTA_ACS_COVID1 %>%
+K <- ZCTA_ACS_COVID %>%
   dplyr::select(testing_ratio)
 X <- quantile_split(data = X, mix = SES_vars, q = 10)
 data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
@@ -550,7 +491,7 @@ m1 = stan(file = BWQS_stan_model,
                                                      adapt_delta = 0.999999999999999))
 
 
-BWQS::bwqs_waic(stanfit = m1) #model fit
+extract_waic(m1)
 
 vars = c("phi", "beta0", "beta1", "delta1", SES_vars)
 parameters_to_drop <- c("phi", "delta1", "beta0", "beta1")
@@ -594,7 +535,7 @@ ggplot(data=BWQS_fits, aes(x=label, y=mean, ymin=lower, ymax=upper)) +
 
 BWQS_weights <- as.numeric(summary(m1)$summary[5:number_of_coefficients,c(1)])
 
-ZCTA_ACS_COVID2 <- X*BWQS_weights[col(ZCTA_ACS_COVID1)] 
+ZCTA_ACS_COVID2 <- X*BWQS_weights[col(ZCTA_ACS_COVID)] 
 
 BWQS_index <- ZCTA_ACS_COVID2 %>% 
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
@@ -608,8 +549,10 @@ plot <- ggplot(ZCTA_BWQS_COVID_shp) +
                                              "positive cases per 100,000 and a WQS score of \n", round(BWQS_index, 2)))) + 
   scale_fill_gradient(low = "#6bf756", high = "#f75656")
 
-plot + theme_bw(base_size = 15) + labs(fill = "Infection Risk Index") +theme(legend.title = element_text(face = "bold"), 
-                                                               legend.position = c(0.25, 0.8))
+plot + theme_bw(base_size = 15) + 
+  labs(fill = "Infection Risk Index") +
+  theme(legend.title = element_text(face = "bold"), 
+        legend.position = c(0.25, 0.8))
 
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
@@ -683,8 +626,6 @@ ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) 
   geom_text(aes(label=ifelse(Proportion >= 5, paste0(sprintf("%.0f", Proportion),"%"),"")),
             position=position_stack(vjust=0.5), colour="black", size = 8) + 
   scale_y_continuous(expand = c(0,0), labels = function(x) paste0(x, "%")) + 
-  # scale_fill_discrete(breaks=c("Other", "Asian", "White", "Hispanic/Latinx", "gray", "Black"),
-  #                     labels = c("Other", "Asian", "White", "Hispanic/Latinx", "", "Black"))+
   theme(legend.text = element_text(size = 14), axis.text.x = element_text(size = 16, color = "black")) + 
   scale_x_discrete(limits = c( "NYC Population", "Below 25th percentile BWQS", "Between 25-75th percentile BWQS", "Above 75th percentile BWQS"), 
                    labels = labels_demographics) + 
@@ -694,25 +635,16 @@ ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) 
 
 #### Step 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
 
-#MTA data is not available everywhere. Data not available in Staten Island, and not every ZCTA has a subway station. 
-
-## Solution: Create population-weighted BWQS infection scores per larger neighborhoods as defined by United Hospital Fund areas
 UHF_ZipCodes1 <- UHF_ZipCodes %>%
-  mutate(uhf = str_extract(`UHF NEIGHBORHOOD ZIP CODES`, "[:digit:]{3}"),
-         nhood = str_extract(`UHF NEIGHBORHOOD ZIP CODES`, "[:alpha:]{1,25}[:punct:]{0,1}[:space:]{0,1}[:alpha:]{1,25}[:alpha:]{1,25}[:punct:]{0,1}[:space:]{0,1}[:alpha:]{1,25}"),
-         zcta = str_extract(`UHF NEIGHBORHOOD ZIP CODES`,"[:digit:]{5}.*")) %>%
-  dplyr::select(-`UHF NEIGHBORHOOD ZIP CODES`) %>%
-  transform(zcta = strsplit(zcta, ",")) %>%
-  unnest(zcta) %>%
-  bind_rows(. , tibble(uhf = c("305", "304", "305", "310", "401"), 
-                       nhood = c("Upper East Side", "Upper West Side", "Upper East Side", "Lower Manhattan", "Long Island City-Astoria"), 
-                       zcta = c("10065", "10069", "10075", "10282", "11109"))) ##some zctas arent matching -- have to manually add them
-
+  mutate(zcta = as.character(zip),
+         uhf = as.character(code)) %>%
+  dplyr::select(zcta, uhf)
+  
 ZCTA_BWQS_score <- ZCTA_BWQS_COVID_shp %>%
   st_drop_geometry() %>%
   dplyr::select(zcta, BWQS_index)
                 
-UHF_BWQS <- ZCTA_ACS_COVID1 %>%
+UHF_BWQS <- ZCTA_ACS_COVID %>%
   left_join(., UHF_ZipCodes1, by = "zcta") %>%
   left_join(., ZCTA_BWQS_score, join = "zcta") %>%
   group_by(uhf) %>%
@@ -727,8 +659,8 @@ UHF_BWQS_COVID_shp <- UHF_shp %>%
 ggplot(UHF_BWQS_COVID_shp) + 
   geom_sf(aes(fill = uhf_weighted_bwqs))
 
-Subway_by_UHF %>% filter(uhf=="all" & date >= "2020-01-29" & date <= "2020-04-30") %>% 
-           ggplot() + geom_point(aes(date, usage, color = uhf))
+Subway_ridership_by_UHF %>% filter(place=="all" & date >= "2020-01-29" & date <= "2020-04-30") %>% 
+           ggplot() + geom_point(aes(date, usage.median.ratio, color = place))
 
 Mean_Ridership <- Subway_ridership_by_UHF %>% #Use the mean ridership to identify the proper function for a nonlinear model
   filter(date >= "2020-01-29" & date <= "2020-04-30" & place=="all") %>%   
@@ -736,15 +668,15 @@ Mean_Ridership <- Subway_ridership_by_UHF %>% #Use the mean ridership to identif
   mutate(time_index = time(date))
 
 Mean_Ridership %>% 
-  ggplot() + geom_point(aes(date, usage))
+  ggplot() + geom_point(aes(date, usage.median.ratio))
 
 #The weibull probability distribution works best for these data
-fit_drm_w2.4 <- drm(usage ~ time_index, fct =  W2.4(), data = Mean_Ridership)
+fit_drm_w2.4 <- drm(usage.median.ratio ~ time_index, fct =  W2.4(), data = Mean_Ridership)
 
 DRM_mean_predictions <- bind_cols(Mean_Ridership,
                                   as.tibble(predict(fit_drm_w2.4, interval = "confidence"))) 
 
-ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage)) + 
+ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage.median.ratio)) + 
   geom_ribbon(data = DRM_mean_predictions, aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50", alpha = .5) +
   geom_line(aes(x = DRM_mean_predictions$date, y = DRM_mean_predictions$Prediction), color = "red") + 
   theme_bw(base_size = 16) +
@@ -766,16 +698,13 @@ Subway_BWQS_df <- Subway_ridership_by_UHF %>%
   filter(!is.na(Risk) & date != "2020-02-17") %>% #removing Presidents' Day national holiday 
   anti_join(., service_changes_in_lowsubway_areas, by = c("date", "place")) #removing low outliers due to service changes in low subway density areas
 
-fit_drm_all <- drm(usage ~ time_index, fct = W2.4(), data = Subway_BWQS_df)
-fit_drm_interact <- drm(usage ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df)
+fit_drm_all <- drm(usage.median.ratio ~ time_index, fct = W2.4(), data = Subway_BWQS_df)
+fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df)
 
 anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the stratified 
 
 summary(fit_drm_interact)
 confint(fit_drm_interact)
-
-compParm(fit_drm_interact, "b", "-")
-compParm(fit_drm_interact, "c", "-")
 
 #b is not actually a slope - but a scaling factor that needs to be transformed into the slope with this formula: -b*(-d/(4*t[e])))
 slopes <- as_tibble(coef(fit_drm_interact), rownames = "vars") %>%
@@ -791,12 +720,11 @@ as_tibble(confint(fit_drm_interact), rownames = "vars") %>%
          slope_higher_ci = -`97.5 %`*(-d/(4*e))) %>%
   dplyr::select(BWQS_risk, slope, slope_lower_ci, slope_higher_ci)
 
-
 fit_drm_predictions <- as_tibble(predict(fit_drm_interact, interval = "confidence"))
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
 ggplot() + 
-  geom_jitter(data = Subway_BWQS_df1, aes(x = date, y = usage, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
+  geom_jitter(data = Subway_BWQS_df1, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
   geom_ribbon(data = subset(Subway_BWQS_df1, Risk == "High"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_ribbon(data = subset(Subway_BWQS_df1, Risk == "Low"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_line(data = Subway_BWQS_df1, aes(x = date, y = Prediction, color = Risk)) +
@@ -823,10 +751,6 @@ ggplot() +
   xlab("") + ylab("") +
   theme_bw()
 
-ggplot() + 
-  geom_sf(data = UHF_BWQS_COVID_shp)+
-  geom_sf(data = included_uhf_shp, fill = "blue1") +
-  theme_bw()
 
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
 
@@ -855,41 +779,30 @@ ZCTA_BWQS_COVID_shp1 %>% #1000*750
   theme_bw(base_size = 15) + 
   theme(legend.title = element_text(face = "bold"), legend.position = c(0.25, 0.8))
 
-  
 
-#Step 2: Run negative binomial GAM with markov random fields with various smooths  
-gam_outputs <- fit_gam_with_markovsmooths(ZCTA_BWQS_COVID_shp1,c(10, 20, 30, 50, 75, 100, 125, 150))
+#Step 2: Run negative binomial model with spatial filtering  
 
-
-
-#Step 3: All results yield low p-values. Choose the most conservative.
-gam_outputs %>%
-  group_by(number_knots) %>%
-  arrange(estimate)
-
-#Step 4: Sensitivity analysis using spatial filtering 
-
-#Step 4a: Identify the neighbor relationships 
+#Step 2a: Identify the neighbor relationships 
 spdat <- as_Spatial(ZCTA_BWQS_COVID_shp1)
-us.nb4 <- knearneigh(coordinates(spdat), k=4)
-us.nb4 <- knn2nb(us.nb4)
-us.nb4 <- make.sym.nb(us.nb4)
-us.wt4 <- nb2listw(us.nb4, style="W")
+ny.nb4 <- knearneigh(coordinates(spdat), k=4)
+ny.nb4 <- knn2nb(ny.nb4)
+ny.nb4 <- make.sym.nb(ny.nb4)
+ny.wt4 <- nb2listw(ny.nb4, style="W")
 
-#Step 4b: Fit the model to identify the component of the data with substantial spatial autocorrelation
-fit.nb.us<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, spdat)
-lm.morantest(fit.nb.us, listw = us.wt4)
+#Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
+fit.nb.ny<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, spdat)
+lm.morantest(fit.nb.ny, listw = ny.wt4)
 me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, 
-           spdat@data, family=negative.binomial(6.731), listw = us.wt4, verbose=T,alpha=.05)
+           spdat@data, family=negative.binomial(6.804), listw = ny.wt4, verbose=T,alpha=.05)
 
-#Step 4c: Pull out these fits and visualize the autocorrelation
+#Step 2c: Pull out these fits and visualize the autocorrelation
 fits <- data.frame(fitted(me.fit))
-spdat$me14 <- fits$vec14
-spplot(spdat, "me14", at=quantile(spdat$me14, p=seq(0,1,length.out = 7)))
+spdat$me22 <- fits$vec22 ##update numbers based on fit
+spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
 
-#Step 4d: Include the fits in our regression model as an additional parameter 
+#Step 2d: Include the fits in our regression model as an additional parameter 
 clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index+fitted(me.fit), spdat@data)
 tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
 as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
-lm.morantest(clean.nb, resfun = residuals, listw=us.wt4)
+lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
 
