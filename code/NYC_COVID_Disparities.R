@@ -5,7 +5,6 @@ library(lubridate)
 library(tidycensus)
 library(GGally)
 library(rstan)
-# library(BWQS)
 library(drc)
 library(spdep)
 library(mgcv)
@@ -14,11 +13,14 @@ library(MASS)
 library(spatialreg)
 library(here)
 library(pdftools)
-#Github packages available via "justlab/Just_universal" and "justlab/MTA_turnstile
+#Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 library(MTA.turnstile)
 
 here() ##make sure your working directory is above two subfolders, which should be "/code" and "/data"
+
+##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
+#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
 
 # data will default to a subfolder "data/" within working directory
 # unless 1. set by an environment variable:
@@ -203,8 +205,6 @@ BWQS_stan_model <- here("code", "nb_bwqs_cov.stan")
 
 
 ####-Census Data Collection and Cleaning-####
-
-#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
 
 ACS_Data <- get_acs(geography = "zcta", 
         variables = c(medincome = "B19013_001",
@@ -490,7 +490,6 @@ m1 = stan(file = BWQS_stan_model,
                          seed = 1234, control = list(max_treedepth = 20,
                                                      adapt_delta = 0.999999999999999))
 
-
 extract_waic(m1)
 
 vars = c("phi", "beta0", "beta1", "delta1", SES_vars)
@@ -553,6 +552,44 @@ plot + theme_bw(base_size = 15) +
   labs(fill = "Infection Risk Index") +
   theme(legend.title = element_text(face = "bold"), 
         legend.position = c(0.25, 0.8))
+
+#Step 6: Example spatial autocorrelation 
+
+##Step 6a: Create spatial residuals dataframes 
+BWQS_residuals <- bind_cols(infection_rate = y, K, BWQS_index) %>%
+  mutate(beta0 = 6.1082, 
+         beta1 = 0.09225, 
+         delta = 20.579)
+
+BWQS_residuals_shp <- ZCTA_BWQS_COVID_shp %>%
+  dplyr::select(zcta, geometry) %>%
+  bind_cols(., BWQS_residuals) %>%
+  mutate(prediction = beta0 + (beta1 * BWQS_index) + (delta * testing_ratio),
+         residuals = log(infection_rate) - prediction,
+         std_residuals = residuals/sd(residuals))
+
+plot(BWQS_residuals_shp$residuals)
+plot(BWQS_residuals_shp$std_residuals)
+hist(BWQS_residuals_shp$residuals)
+hist(BWQS_residuals_shp$std_residuals)
+
+#creating contiguity matrix to assess spatial autocorrelation
+spdat_bwqs_resid <- as_Spatial(BWQS_residuals_shp)
+bwqs.resid.ny.nb4 <- knearneigh(coordinates(spdat_bwqs_resid), k=4)
+bwqs.resid.ny.nb4 <- knn2nb(bwqs.resid.ny.nb4)
+bwqs.resid.ny.nb4 <- make.sym.nb(bwqs.resid.ny.nb4)
+bwqs.resid.ny.wt4 <- nb2listw(bwqs.resid.ny.nb4, style="W")
+
+moran.mc(spdat_bwqs_resid$infection_rate, listw=ny.wt4, nsim = 999)
+moran.mc(spdat_bwqs_resid$residuals, listw=ny.wt4, nsim = 999)
+
+
+
+
+#need to construct the nhood matrix up here -- right now it's at the end of the code
+moran.mc(BWQS_residuals_shp$infection_rate, listw=ny.wt4, nsim = 999)
+# moran.test(BWQS_residuals_shp$residuals, listw=ny.wt4)
+moran.mc(BWQS_residuals_shp$residuals, listw=ny.wt4, nsim = 999)
 
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
@@ -797,7 +834,7 @@ me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus)+
 
 #Step 2c: Pull out these fits and visualize the autocorrelation
 fits <- data.frame(fitted(me.fit))
-spdat$me22 <- fits$vec22 ##update numbers based on fit
+spdat$me22 <- fits$vec22 
 spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
 
 #Step 2d: Include the fits in our regression model as an additional parameter 
