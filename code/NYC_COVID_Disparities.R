@@ -13,6 +13,7 @@ library(MASS)
 library(spatialreg)
 library(here)
 library(pdftools)
+library(matrixStats)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 library(MTA.turnstile)
@@ -496,7 +497,9 @@ vars = c("phi", "beta0", "beta1", "delta1", SES_vars)
 parameters_to_drop <- c("phi", "delta1", "beta0", "beta1")
 number_of_coefficients <- length(SES_vars) + 4
 
-BWQS_fits <- bind_cols(as_tibble(summary(m1)$summary[1:number_of_coefficients,c(1,4,8)]), label = vars) %>%
+BWQS_params <- bind_cols(as_tibble(summary(m1)$summary[1:number_of_coefficients,c(1,4,8)]), label = vars)
+
+BWQS_fits <- BWQS_params %>%
   rename(lower = "2.5%",
          upper = "97.5%") %>%
   filter(!label %in% parameters_to_drop) %>%
@@ -540,6 +543,19 @@ BWQS_index <- ZCTA_ACS_COVID2 %>%
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
   dplyr::select(BWQS_index) 
 
+BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
+  (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
+  (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(K$testing_ratio)))
+colnames(BWQS_predicted_infection_median_testing) <- "predicted"
+
+# Visualize the relationship between BWQS index and infection rate
+BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
+  geom_line(aes(y = predicted)) + scale_x_continuous("BWQS Index") + scale_y_continuous("Infections per 100,000")
+BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", xparams = list(binwidth = 1), yparams = list(binwidth = 200))
+# png(filename = "bwqs_scatter.png", width = 96*5, height = 96*5)
+#   print(BWQS_scatter)
+# dev.off()
+
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
 #Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
@@ -557,9 +573,9 @@ plot + theme_bw(base_size = 15) +
 
 ##Step 6a: Create spatial residuals dataframes 
 BWQS_residuals <- bind_cols(infection_rate = y, K, BWQS_index) %>%
-  mutate(beta0 = 6.1082, 
-         beta1 = 0.09225, 
-         delta = 20.579)
+  mutate(beta0 = BWQS_params[BWQS_params$label == "beta0", ]$mean, 
+         beta1 = BWQS_params[BWQS_params$label == "beta1", ]$mean, 
+         delta = BWQS_params[BWQS_params$label == "delta1", ]$mean)
 
 BWQS_residuals_shp <- ZCTA_BWQS_COVID_shp %>%
   dplyr::select(zcta, geometry) %>%
@@ -654,20 +670,22 @@ labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percen
                          "Between 25-75th percentile BWQS" = "Between 25-75th\npercentile BWQS", "Above 75th percentile BWQS" = "Above 75th\npercentile BWQS")
 
 ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) + 
-  geom_rect(data = subset(Demographics_by_BWQS, Group=="NYC Population"), 
+    geom_rect(data = subset(Demographics_by_BWQS, Group=="NYC Population"), 
             aes(xmin=as.numeric(Group)-.35,xmax=as.numeric(Group)+.35, ymin=0, ymax=100, fill="gray85"), color = "gray", alpha = .1) +
   geom_bar(data = subset(Demographics_by_BWQS, Group!="NYC Population"), position="stack", stat="identity", width = .75) +
   geom_bar(data = subset(Demographics_by_BWQS, Group=="NYC Population"), position="stack", stat="identity", width = .45) +
-  scale_fill_manual(breaks = c("Other", "Asian", "White", "Hispanic/Latinx", "Black"), values = c("#984ea3","#ff7f00","gray85", "#4daf4a", "#e41a1c", "#377eb8"))  +
-  theme_bw(base_size = 16)+
+  scale_fill_manual(breaks = c("Other", "Asian", "White", "Hispanic/Latinx", "Black"), 
+                    values = c("#984ea3","#ff7f00","gray85", "#4daf4a", "#e41a1c", "#377eb8"))  +
   geom_text(aes(label=ifelse(Proportion >= 5, paste0(sprintf("%.0f", Proportion),"%"),"")),
             position=position_stack(vjust=0.5), colour="black", size = 8) + 
-  scale_y_continuous(expand = c(0,0), labels = function(x) paste0(x, "%")) + 
-  theme(legend.text = element_text(size = 14), axis.text.x = element_text(size = 16, color = "black")) + 
+  scale_y_continuous("Percentage", expand = c(0,0), labels = function(x) paste0(x, "%")) + 
   scale_x_discrete(limits = c( "NYC Population", "Below 25th percentile BWQS", "Between 25-75th percentile BWQS", "Above 75th percentile BWQS"), 
                    labels = labels_demographics) + 
-  ylab("Percentage")+
-  xlab("")
+  theme_bw(base_size = 16) +
+  theme(legend.text = element_text(size = 14),
+        axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 16, color = "black"), 
+        axis.title.x = element_blank()) 
 
 
 #### Step 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
@@ -843,3 +861,5 @@ tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
 as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
 lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
 
+#### Appendix
+sessioninfo::session_info()
