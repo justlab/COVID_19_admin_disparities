@@ -30,7 +30,7 @@ data.root = Sys.getenv("COVID_DATA")
 if (data.root == "") data.root = "data"
 if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
 print(paste("data being downloaded into directory", dQuote(data.root)))
-MTA_TURNSTILE_DATA_DIR = here("data")
+if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == "") message("MTA turnstile processing in a temp directory. To cache persistently set an environment variable 'MTA_TURNSTILE_DATA_DIR'. See also ?usethis::edit_r_environ()")
 
 ##### FUNCTIONS ####
 
@@ -551,6 +551,7 @@ colnames(BWQS_predicted_infection_median_testing) <- "predicted"
 BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
   geom_line(aes(y = predicted)) + scale_x_continuous("BWQS Index") + scale_y_continuous("Infections per 100,000")
 BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", xparams = list(binwidth = 1), yparams = list(binwidth = 200))
+BWQS_scatter
 # png(filename = "bwqs_scatter.png", width = 96*5, height = 96*5)
 #   print(BWQS_scatter)
 # dev.off()
