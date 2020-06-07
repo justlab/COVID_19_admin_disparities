@@ -3,7 +3,7 @@ library(tidyverse)
 library(sf)
 library(lubridate)
 library(tidycensus)
-library(GGally)
+library(ggExtra)
 library(rstan)
 library(drc)
 library(spdep)
@@ -97,7 +97,9 @@ Pluto = download(
     "https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc_pluto_20v3_csv.zip",
     "pluto.zip",
     function(p)
-        read_csv(unz(p, "pluto_20v3.csv")))
+        read_csv(unz(p, "pluto_20v3.csv"), col_types = cols(spdist2 = col_character(), 
+                                                overlay2 = col_character(),
+                                                zonedist4 = col_character())))
 
 Bldg_Footprints <- download(
   # https://data.cityofnewyork.us/Housing-Development/Building-Footprints/nqwf-w8eh
@@ -415,13 +417,8 @@ ZCTA_ACS_COVID_shp <- MODZCTA_NYC_shp1 %>%
 ZCTA_ACS_COVID <- ZCTA_ACS_COVID_shp %>%
   st_set_geometry(., NULL) #remove geometry
 
-#any missing data?
-ZCTA_ACS_COVID %>% 
-  select_if(function(x) any(is.na(x))) %>% 
-  summarise_each(funs(sum(is.na(.))))
-
-
 ### Cleaning done --- Now for the Analysis ###
+
 
 #### Part 1: Creation of BWQS Neighborhood Infection Risk Scores ####
 
@@ -443,10 +440,15 @@ SES_vars <- names(ZCTA_ACS_COVID %>% dplyr::select(one_over_medincome, not_insur
                                                     not_quarantined_jobs, essentialworker_pubtrans, essentialworker_drove, 
                                                     didnot_workhome_commute, res_vol_popdensity, avg_hhold_size))
 
-#Step 2a: Visualize relationships between explanatory variables to make sure nothing >0.9 correlation, as this could bias BWQS
-ggpairs(ZCTA_ACS_COVID, columns = SES_vars) 
+#Step 2a: Examine relationships between explanatory variables to make sure nothing >0.9 correlation, as this could bias BWQS
+Cors_SESVars <- cor(x = ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)), method = "kendall")
+Cors_SESVars1 <- as.data.frame(Cors_SESVars)
+Cors_SESVars1$var1 <- row.names(Cors_SESVars1)
+Cors_SESVars2 <- gather(data = Cors_SESVars1, key = "var2", value = "correlation", -var1) %>%
+  filter(var1 != var2)
 
-## Step 2b: Examine Univariable spearman associations for all selected variables with the outcome  
+
+## Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
 bind_cols(Variables = SES_vars,
           
         ZCTA_ACS_COVID %>%
@@ -530,8 +532,13 @@ ggplot(data=BWQS_fits, aes(x=label, y=mean, ymin=lower, ymax=upper)) +
   theme_set(theme_bw(base_size = 18)) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
-  
-  
+
+Cors_SESVars_quantiled <- cor(X, method = "kendall")  
+Cors_SESVars_quantiled1 <- as.data.frame(Cors_SESVars_quantiled)
+Cors_SESVars_quantiled1$var1 <- row.names(Cors_SESVars_quantiled1)
+Cors_SESVars_quantiled2 <- gather(data = Cors_SESVars_quantiled1, key = "var2", value = "correlation", -var1) %>%
+  filter(var1 != var2)
+
 #Step 4: Use the variable-specific weight on the decile quantile splits to create a 10 point ZCTA-level infection risk score  
 
 BWQS_weights <- as.numeric(summary(m1)$summary[5:number_of_coefficients,c(1)])
@@ -564,45 +571,10 @@ plot <- ggplot(ZCTA_BWQS_COVID_shp) +
                                              "positive cases per 100,000 and a WQS score of \n", round(BWQS_index, 2)))) + 
   scale_fill_gradient(low = "#6bf756", high = "#f75656")
 
-plot + theme_bw(base_size = 15) + 
+plot + theme_bw(base_size = 15) + #1000*750
   labs(fill = "Infection Risk Index") +
   theme(legend.title = element_text(face = "bold"), 
         legend.position = c(0.25, 0.8))
-
-#Step 6: Example spatial autocorrelation 
-
-##Step 6a: Create spatial residuals dataframes 
-BWQS_residuals <- bind_cols(infection_rate = y, K, BWQS_index) %>%
-  mutate(beta0 = BWQS_params[BWQS_params$label == "beta0", ]$mean, 
-         beta1 = BWQS_params[BWQS_params$label == "beta1", ]$mean, 
-         delta = BWQS_params[BWQS_params$label == "delta1", ]$mean)
-
-BWQS_residuals_shp <- ZCTA_BWQS_COVID_shp %>%
-  dplyr::select(zcta, geometry) %>%
-  bind_cols(., BWQS_residuals) %>%
-  mutate(prediction = beta0 + (beta1 * BWQS_index) + (delta * testing_ratio),
-         residuals = log(infection_rate) - prediction,
-         std_residuals = residuals/sd(residuals))
-
-plot(BWQS_residuals_shp$residuals)
-plot(BWQS_residuals_shp$std_residuals)
-hist(BWQS_residuals_shp$residuals)
-hist(BWQS_residuals_shp$std_residuals)
-
-# #creating contiguity matrix to assess spatial autocorrelation
-# spdat_bwqs_resid <- as_Spatial(BWQS_residuals_shp)
-# bwqs.resid.ny.nb4 <- knearneigh(coordinates(spdat_bwqs_resid), k=4)
-# bwqs.resid.ny.nb4 <- knn2nb(bwqs.resid.ny.nb4)
-# bwqs.resid.ny.nb4 <- make.sym.nb(bwqs.resid.ny.nb4)
-# bwqs.resid.ny.wt4 <- nb2listw(bwqs.resid.ny.nb4, style="W")
-# 
-# moran.mc(spdat_bwqs_resid$infection_rate, listw=ny.wt4, nsim = 999)
-# moran.mc(spdat_bwqs_resid$residuals, listw=ny.wt4, nsim = 999)
-# 
-# #need to construct the nhood matrix up here -- right now it's at the end of the code
-# moran.mc(BWQS_residuals_shp$infection_rate, listw=ny.wt4, nsim = 999)
-# # moran.test(BWQS_residuals_shp$residuals, listw=ny.wt4)
-# moran.mc(BWQS_residuals_shp$residuals, listw=ny.wt4, nsim = 999)
 
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
@@ -762,7 +734,7 @@ anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the strat
 summary(fit_drm_interact)
 confint(fit_drm_interact)
 
-#b is not actually a slope - but a scaling factor that needs to be transformed into the slope with this formula: -b*(-d/(4*t[e])))
+#b is not actually a slope - but a scaling factor that needs to be transformed into the slope
 slopes <- as_tibble(coef(fit_drm_interact), rownames = "vars") %>%
   separate(col = vars, into = c("vars", "BWQS_risk"), sep = ":") %>%
   spread(., vars, value) %>%
@@ -848,19 +820,19 @@ ny.wt4 <- nb2listw(ny.nb4, style="W")
 #Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
 fit.nb.ny<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, spdat)
 lm.morantest(fit.nb.ny, listw = ny.wt4)
-# me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, 
-#            spdat@data, family=negative.binomial(6.804), listw = ny.wt4, verbose=T,alpha=.05)
-# 
-# #Step 2c: Pull out these fits and visualize the autocorrelation
-# fits <- data.frame(fitted(me.fit))
-# spdat$me22 <- fits$vec22 
-# spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
-# 
-# #Step 2d: Include the fits in our regression model as an additional parameter 
-# clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index+fitted(me.fit), spdat@data)
-# tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
-# as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
-# lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
+me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index,
+           spdat@data, family=negative.binomial(6.804), listw = ny.wt4, verbose=T, alpha=.1, nsim = 999)
+
+#Step 2c: Pull out these fits and visualize the autocorrelation
+fits <- data.frame(fitted(me.fit))
+spdat$me22 <- fits$vec22
+spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
+
+#Step 2d: Include the fits in our regression model as an additional parameter
+clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index+fitted(me.fit), spdat@data)
+tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
+as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
+lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
 
 #### Appendix
 Sys.time()
