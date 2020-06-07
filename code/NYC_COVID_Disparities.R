@@ -725,8 +725,12 @@ Mean_Ridership %>%
 #The weibull probability distribution works best for these data
 fit_drm_w2.4 <- drm(usage.median.ratio ~ time_index, fct =  W2.4(), data = Mean_Ridership)
 
+# suppress warning about vector recycling in predict.drc.R
+handler <- function(w) if( any( grepl( "Recycling array of length 1 in array-vector arithmetic is deprecated.", w) ) ) 
+  invokeRestart( "muffleWarning" )
+
 DRM_mean_predictions <- bind_cols(Mean_Ridership,
-                                  as.tibble(predict(fit_drm_w2.4, interval = "confidence"))) 
+                                  as.tibble(withCallingHandlers(predict(fit_drm_w2.4, interval = "confidence"), warning = handler ))) 
 
 ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage.median.ratio)) + 
   geom_ribbon(data = DRM_mean_predictions, aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50", alpha = .5) +
@@ -772,7 +776,7 @@ as_tibble(confint(fit_drm_interact), rownames = "vars") %>%
          slope_higher_ci = -`97.5 %`*(-d/(4*e))) %>%
   dplyr::select(BWQS_risk, slope, slope_lower_ci, slope_higher_ci)
 
-fit_drm_predictions <- as_tibble(predict(fit_drm_interact, interval = "confidence"))
+fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler ))
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
 ggplot() + 
@@ -859,4 +863,5 @@ lm.morantest(fit.nb.ny, listw = ny.wt4)
 # lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
 
 #### Appendix
+Sys.time()
 sessioninfo::session_info()
