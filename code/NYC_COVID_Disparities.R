@@ -18,7 +18,7 @@ library(matrixStats)
 library(Just.universal) 
 library(MTA.turnstile)
 
-here() ##make sure your working directory is above two subfolders, which should be "/code" and "/data"
+here() # current working directory
 
 ##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
 #census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
@@ -32,15 +32,14 @@ if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
 print(paste("data being downloaded into directory", dQuote(data.root)))
 MTA_TURNSTILE_DATA_DIR = here("data")
 
-####---------------FUNCTIONS---------------------####
+##### FUNCTIONS ####
 
 read_w_filenames <- function(flnm) {
   read_csv(flnm) %>%
     mutate(filename = flnm)
 }
 
-##Kodi -- can you make this function work to extract the WAIC of the model?
-extract_waic <- function (stanfit){ #doesnt currently work
+extract_waic <- function (stanfit){
   log_lik <- extract(stanfit, "log_lik")$log_lik
   dim(log_lik) <- if (length(dim(log_lik)) == 1) 
     c(length(log_lik), 1)
@@ -90,7 +89,7 @@ download = function(url, to, f, ...){
 }
 
 
-####--------------Load Data--------------####
+##### Load Data #####
 
 
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
@@ -205,7 +204,7 @@ BWQS_stan_model <- here("code", "nb_bwqs_cov.stan")
 
 
 
-####-Census Data Collection and Cleaning-####
+####Census Data Collection and Cleaning####
 
 ACS_Data <- get_acs(geography = "zcta", 
         variables = c(medincome = "B19013_001",
@@ -589,23 +588,20 @@ plot(BWQS_residuals_shp$std_residuals)
 hist(BWQS_residuals_shp$residuals)
 hist(BWQS_residuals_shp$std_residuals)
 
-#creating contiguity matrix to assess spatial autocorrelation
-spdat_bwqs_resid <- as_Spatial(BWQS_residuals_shp)
-bwqs.resid.ny.nb4 <- knearneigh(coordinates(spdat_bwqs_resid), k=4)
-bwqs.resid.ny.nb4 <- knn2nb(bwqs.resid.ny.nb4)
-bwqs.resid.ny.nb4 <- make.sym.nb(bwqs.resid.ny.nb4)
-bwqs.resid.ny.wt4 <- nb2listw(bwqs.resid.ny.nb4, style="W")
-
-moran.mc(spdat_bwqs_resid$infection_rate, listw=ny.wt4, nsim = 999)
-moran.mc(spdat_bwqs_resid$residuals, listw=ny.wt4, nsim = 999)
-
-
-
-
-#need to construct the nhood matrix up here -- right now it's at the end of the code
-moran.mc(BWQS_residuals_shp$infection_rate, listw=ny.wt4, nsim = 999)
-# moran.test(BWQS_residuals_shp$residuals, listw=ny.wt4)
-moran.mc(BWQS_residuals_shp$residuals, listw=ny.wt4, nsim = 999)
+# #creating contiguity matrix to assess spatial autocorrelation
+# spdat_bwqs_resid <- as_Spatial(BWQS_residuals_shp)
+# bwqs.resid.ny.nb4 <- knearneigh(coordinates(spdat_bwqs_resid), k=4)
+# bwqs.resid.ny.nb4 <- knn2nb(bwqs.resid.ny.nb4)
+# bwqs.resid.ny.nb4 <- make.sym.nb(bwqs.resid.ny.nb4)
+# bwqs.resid.ny.wt4 <- nb2listw(bwqs.resid.ny.nb4, style="W")
+# 
+# moran.mc(spdat_bwqs_resid$infection_rate, listw=ny.wt4, nsim = 999)
+# moran.mc(spdat_bwqs_resid$residuals, listw=ny.wt4, nsim = 999)
+# 
+# #need to construct the nhood matrix up here -- right now it's at the end of the code
+# moran.mc(BWQS_residuals_shp$infection_rate, listw=ny.wt4, nsim = 999)
+# # moran.test(BWQS_residuals_shp$residuals, listw=ny.wt4)
+# moran.mc(BWQS_residuals_shp$residuals, listw=ny.wt4, nsim = 999)
 
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
@@ -847,19 +843,19 @@ ny.wt4 <- nb2listw(ny.nb4, style="W")
 #Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
 fit.nb.ny<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, spdat)
 lm.morantest(fit.nb.ny, listw = ny.wt4)
-me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, 
-           spdat@data, family=negative.binomial(6.804), listw = ny.wt4, verbose=T,alpha=.05)
-
-#Step 2c: Pull out these fits and visualize the autocorrelation
-fits <- data.frame(fitted(me.fit))
-spdat$me22 <- fits$vec22 
-spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
-
-#Step 2d: Include the fits in our regression model as an additional parameter 
-clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index+fitted(me.fit), spdat@data)
-tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
-as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
-lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
+# me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, 
+#            spdat@data, family=negative.binomial(6.804), listw = ny.wt4, verbose=T,alpha=.05)
+# 
+# #Step 2c: Pull out these fits and visualize the autocorrelation
+# fits <- data.frame(fitted(me.fit))
+# spdat$me22 <- fits$vec22 
+# spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
+# 
+# #Step 2d: Include the fits in our regression model as an additional parameter 
+# clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index+fitted(me.fit), spdat@data)
+# tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
+# as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
+# lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
 
 #### Appendix
 sessioninfo::session_info()
