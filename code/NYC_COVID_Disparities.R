@@ -18,6 +18,9 @@ library(egg)
 library(ggpubr)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
+mta_dir = here("data/mta_turnstile")
+if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
+Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
 library(MTA.turnstile)
 
 here() # current working directory
