@@ -14,6 +14,8 @@ library(spatialreg)
 library(here)
 library(pdftools)
 library(matrixStats)
+library(egg)
+library(ggpubr)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 library(MTA.turnstile)
@@ -368,22 +370,28 @@ ZCTA_by_boro1 <- ZCTA_by_boro %>%
             tibble(boro = as.character(c("Manhattan", "Manhattan" ,"Queens")), #correcting nas
                      zcta = as.character(c("10069", "10282", "11109"))))
 
-MODZCTA_NYC_shp1 %>%
+# Supplemental Figure 1 (A - Tests)
+sfig1a <- MODZCTA_NYC_shp1 %>%
   left_join(., May7_tests, by = "zcta") %>%
   left_join(., ACS_Data2, by = "zcta") %>%
   filter(zcta != "99999") %>%
   mutate(pos_per_100000 = (Positive/total_pop1)*100000) %>%
   ggplot() +
   geom_sf(data = NYC_basemap_shp)+
-  geom_sf(aes(fill = pos_per_100000))+
+  geom_sf(aes(fill = pos_per_100000), lwd = 0.2)+
   labs(fill = "Positives per 100,000") +
   ggtitle("Cumulative Positive COVID tests by zip code (May 7, 2020)") +
-  scale_fill_gradient(low = "#6bf756", high = "#f75656") + 
+  scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7)) + 
   theme_bw() +
-  theme_bw(base_size = 15) + 
-  theme(legend.title = element_text(face = "bold"), legend.position = c(0.25, 0.8))
- 
-
+  theme_bw(base_size = 6) + 
+  theme(legend.title = element_text(face = "bold", size = 6), 
+        panel.background = element_rect(fill = "#dedede"), 
+        legend.background = element_rect(fill = "transparent"),
+        legend.position = c(0.15, 0.80),
+        legend.text = element_text(size = 6),
+        plot.margin = unit(c(4,0,4,0), "pt"),
+        legend.key.size = unit(1.1, "lines"))
+sfig1a 
 
 #### Create data frames of all above information ####
 
@@ -491,7 +499,7 @@ m1 = stan(file = BWQS_stan_model,
                          thin = 10, refresh = 0, algorithm = "NUTS",
                          seed = 1234, control = list(max_treedepth = 20,
                                                      adapt_delta = 0.999999999999999))
-
+# detach("package:raster", unload = TRUE) # may be needed
 extract_waic(m1)
 
 vars = c("phi", "beta0", "beta1", "delta1", SES_vars)
@@ -566,16 +574,23 @@ BWQS_scatter
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
 #Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
-plot <- ggplot(ZCTA_BWQS_COVID_shp) + 
-  geom_sf(aes(fill = BWQS_index, text = paste("ZCTA <b>", zcta, "</b> had \n", round(pos_per_100000, 0), 
-                                             "positive cases per 100,000 and a WQS score of \n", round(BWQS_index, 2)))) + 
-  scale_fill_gradient(low = "#6bf756", high = "#f75656")
-
-plot + theme_bw(base_size = 15) + #1000*750
+# Figure 3
+fig3 <- ggplot(ZCTA_BWQS_COVID_shp) + 
+  geom_sf(aes(fill = BWQS_index), lwd = 0.2) + 
+  scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
+  #theme_bw(base_size = 15) + 
+  theme_bw(base_size = 5) + 
   labs(fill = "Infection Risk Index") +
-  theme(legend.title = element_text(face = "bold"), 
-        legend.position = c(0.25, 0.8))
+  theme(legend.title = element_text(face = "bold", size = 7), 
+        #legend.position = c(0.25, 0.8), 
+        panel.background = element_rect(fill = "#dedede"), 
+        legend.background = element_rect(fill = "transparent"),
+        legend.position = c(0.15, 0.80),
+        legend.text = element_text(size = 6),
+        legend.key.size = unit(1.1, "lines"))
 
+if(!dir.exists(here("figures"))) dir.create(here("figures"))
+ggsave(plot = fig3, filename = "figures/fig3.png", dpi = 300, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data1 %>% rename(zcta = "GEOID") %>%
@@ -771,6 +786,7 @@ notincluded_uhf_shp <- UHF_BWQS_COVID_shp %>%
            UHFCODE !=0) %>%
   mutate(NotIncluded = "*")
 
+# Supplemental Figure 3
 ggplot() + 
   geom_sf(data = NYC_basemap_shp) +
   geom_sf(data = subset(UHF_BWQS_COVID_shp, !is.na(Risk)), aes(fill = Risk)) + 
@@ -796,17 +812,30 @@ ZCTA_BWQS_COVID_shp1 <- ZCTA_ACS_COVID_shp %>%
   mutate(prop_65plus = age65_plus/total_pop1,
          zcta = as.numeric(zcta)) 
 
-ZCTA_BWQS_COVID_shp1 %>% #1000*750
+# Supplemental Figure 1 (B - Mortality)
+sfig1b <- ZCTA_BWQS_COVID_shp1 %>% 
   ggplot() +
   geom_sf(data = NYC_basemap_shp)+
-  geom_sf(aes(fill = COVID_DEATH_RATE))+
+  geom_sf(aes(fill = COVID_DEATH_RATE), lwd = 0.2)+
   labs(fill = "Mortality per 100,000") +
   ggtitle("Cumulative COVID Mortality by zip code (May 23, 2020)") +
-  scale_fill_gradient(low = "#6bf756", high = "#f75656") + 
-  theme_bw() +
-  theme_bw(base_size = 15) + 
-  theme(legend.title = element_text(face = "bold"), legend.position = c(0.25, 0.8))
+  scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7)) + 
+  theme_bw(base_size = 6) + 
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.title = element_text(face = "bold", size = 6), 
+        panel.background = element_rect(fill = "#dedede"), 
+        legend.background = element_rect(fill = "transparent"),
+        legend.position = c(0.15, 0.80),
+        legend.text = element_text(size = 6),
+        legend.key.size = unit(1.1, "lines"),
+        plot.margin = unit(c(4,0,4,0), "pt"),
+        )
+sfig1b
 
+sfig1 <- ggarrange(plots = list(sfig1a, sfig1b), nrow = 1, padding = unit(0, "pt"))
+sfig1 <- ggarrange(sfig1a, sfig1b, nrow = 1)
+ggexport(sfig1, filename = "figures/sfig1.png", res = 300, width = 7.3*300, height = 3.7*300)
 
 #Step 2: Run negative binomial model with spatial filtering  
 
