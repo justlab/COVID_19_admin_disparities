@@ -4,6 +4,7 @@ library(sf)
 library(lubridate)
 library(tidycensus)
 library(ggExtra)
+library(ggridges)
 library(rstan)
 library(drc)
 library(spdep)
@@ -21,6 +22,7 @@ library(Just.universal)
 mta_dir = here("data/mta_turnstile")
 if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
 Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
+if(!dir.exists(here("figures"))) dir.create(here("figures"))
 library(MTA.turnstile)
 
 here() # current working directory
@@ -534,7 +536,7 @@ labels1 <- c("one_over_medincome" = "1/\nmedian income",
              "avg_hhold_size" = "Average people\nper household")
 
 
-ggplot(data=BWQS_fits, aes(x=label, y=mean, ymin=lower, ymax=upper)) +
+fig2 <- ggplot(data=BWQS_fits, aes(x=label, y=mean, ymin=lower, ymax=upper)) +
   geom_pointrange() + 
   coord_flip() + 
   xlab("") + 
@@ -543,6 +545,7 @@ ggplot(data=BWQS_fits, aes(x=label, y=mean, ymin=lower, ymax=upper)) +
   theme_set(theme_bw(base_size = 18)) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
+ggsave(fig2, filename = "figures/fig2.png", dpi = 600, width = 8, height = 8)
 
 Cors_SESVars_quantiled <- cor(X, method = "kendall")  
 Cors_SESVars_quantiled1 <- as.data.frame(Cors_SESVars_quantiled)
@@ -592,7 +595,7 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
         legend.text = element_text(size = 6),
         legend.key.size = unit(1.1, "lines"))
 
-if(!dir.exists(here("figures"))) dir.create(here("figures"))
+
 ggsave(plot = fig3, filename = "figures/fig3.png", dpi = 300, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
@@ -604,6 +607,34 @@ ZCTA_BQWS <- ZCTA_BWQS_COVID_shp %>%
   st_set_geometry(., NULL) %>%
   dplyr::select(zcta, BWQS_index)
 
+Demographics_for_ridges <- Demographics %>%
+  left_join(., ZCTA_BQWS, by = "zcta") %>%
+  dplyr::select(-total_pop1) %>%
+  gather(key = "Race/Ethnicity", value = "Population", hisplat_raceethnic:other_raceethnic) %>%
+  mutate(`Race/Ethnicity` = if_else(`Race/Ethnicity`=="hisplat_raceethnic","Hispanic/Latinx",
+                                    if_else(`Race/Ethnicity`=="nonhispLat_black_raceethnic", "Black",
+                                            if_else(`Race/Ethnicity`=="nonhispLat_white_raceethnic", "White",
+                                                    if_else(`Race/Ethnicity`== "nonhispLat_asian_raceethnic", "Asian", "Other")))),
+         `Race/Ethnicity` = factor(`Race/Ethnicity`, levels = c( "White",  "Asian", "Other","Hispanic/Latinx","Black"))) 
+
+
+Demographics_for_ridges %>%
+  group_by(`Race/Ethnicity`) %>%
+  summarise(weighted.mean(BWQS_index, Population),
+            weightedMedian(BWQS_index, Population))
+
+
+fig4 <- ggplot(Demographics_for_ridges,
+       aes(x = BWQS_index, y = `Race/Ethnicity`)) + 
+  xlab("BWQS Index")+
+  theme(legend.position = "none") +
+  geom_density_ridges(
+    aes(height = ..density..,  
+        weight = Population / sum(Population)),
+    scale = 0.95,
+    stat =
+      "density") 
+ggsave(plot = fig4, filename = "figures/fig4.png", dpi = 400, device = "png", width = 8, height = 5)
 
 Below_25th_zctas <- ZCTA_BQWS %>%
   filter(BWQS_index<quantile(BWQS_index, .25))
@@ -656,7 +687,7 @@ Demographics_by_BWQS <- bind_rows(Race_Ethncity_all, Race_Ethncity_below25th, Ra
 labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percentile BWQS" = "Below 25th\npercentile BWQS", 
                          "Between 25-75th percentile BWQS" = "Between 25-75th\npercentile BWQS", "Above 75th percentile BWQS" = "Above 75th\npercentile BWQS")
 
-ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) + 
+sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) + 
     geom_rect(data = subset(Demographics_by_BWQS, Group=="NYC Population"), 
             aes(xmin=as.numeric(Group)-.35,xmax=as.numeric(Group)+.35, ymin=0, ymax=100, fill="gray85"), color = "gray", alpha = .1) +
   geom_bar(data = subset(Demographics_by_BWQS, Group!="NYC Population"), position="stack", stat="identity", width = .75) +
@@ -673,6 +704,8 @@ ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) 
         axis.text.y = element_text(size = 16),
         axis.text.x = element_text(size = 16, color = "black"), 
         axis.title.x = element_blank()) 
+ggsave(sfig2, filename = "figures/sfig2.png", device = "png", dpi = 500, width = 12, height = 6)
+
 
 
 #### Step 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
@@ -722,12 +755,13 @@ handler <- function(w) if( any( grepl( "Recycling array of length 1 in array-vec
 DRM_mean_predictions <- bind_cols(Mean_Ridership,
                                   as.tibble(withCallingHandlers(predict(fit_drm_w2.4, interval = "confidence"), warning = handler ))) 
 
-ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage.median.ratio)) + 
+sfig4 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage.median.ratio)) + 
   geom_ribbon(data = DRM_mean_predictions, aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50", alpha = .5) +
   geom_line(aes(x = DRM_mean_predictions$date, y = DRM_mean_predictions$Prediction), color = "red") + 
   theme_bw(base_size = 16) +
   xlab("Date") +
   ylab("Relative Subway Use (%)")
+ggsave(sfig4, filename = "figures/sfig4.png", device = "png", dpi = 400, width = 8, height = 5)
 
 #create a dataframe for the analysis 
 service_changes_in_lowsubway_areas <- tibble(date = as.Date(c("2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-15", "2020-02-16", "2020-02-22", "2020-02-23", "2020-02-29", "2020-03-01", "2020-03-07", "2020-03-08", 
@@ -747,7 +781,7 @@ Subway_BWQS_df <- Subway_ridership_by_UHF %>%
 fit_drm_all <- drm(usage.median.ratio ~ time_index, fct = W2.4(), data = Subway_BWQS_df)
 fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df)
 
-anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the stratified 
+anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
 
 summary(fit_drm_interact)
 confint(fit_drm_interact)
@@ -769,7 +803,7 @@ as_tibble(confint(fit_drm_interact), rownames = "vars") %>%
 fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler ))
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
-ggplot() + 
+fig5 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_df1, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
   geom_ribbon(data = subset(Subway_BWQS_df1, Risk == "High"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_ribbon(data = subset(Subway_BWQS_df1, Risk == "Low"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
@@ -781,6 +815,7 @@ ggplot() +
   theme_bw(base_size = 16) +
   theme(legend.title = element_text(face = "bold"), legend.position = c(0.9, 0.7)) + 
   scale_y_continuous(limits = c(0, 1.1))
+ggsave(fig5, filename = "figures/fig5.png", dpi = 600, width = 8, height = 6)
 
 #which ones were dropped?
 included_uhf <- Subway_BWQS_df %>% distinct(UHFCODE)
@@ -789,14 +824,15 @@ notincluded_uhf_shp <- UHF_BWQS_COVID_shp %>%
            UHFCODE !=0) %>%
   mutate(NotIncluded = "*")
 
-# Supplemental Figure 3
-ggplot() + 
+sfig3 <- ggplot() + 
   geom_sf(data = NYC_basemap_shp) +
   geom_sf(data = subset(UHF_BWQS_COVID_shp, !is.na(Risk)), aes(fill = Risk)) + 
   geom_sf(data = SubwayStation_shp) +
   geom_sf_text(data = notincluded_uhf_shp, aes(label = NotIncluded), size = 9) +
   xlab("") + ylab("") +
   theme_bw()
+ggsave(sfig3, filename = "figures/sfig3.png", dpi = 500)
+
 
 
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
