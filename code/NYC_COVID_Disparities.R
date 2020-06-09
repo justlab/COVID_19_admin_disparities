@@ -110,7 +110,7 @@ Pluto = download(
 
 Bldg_Footprints <- download(
   # https://data.cityofnewyork.us/Housing-Development/Building-Footprints/nqwf-w8eh
-    "https://data.cityofnewyork.us/api/geospatial/utk2-gkjy?method=export&format=Shapefile",
+    "https://data.cityofnewyork.us/api/geospatial/nqwf-w8eh?method=export&format=Shapefile",
     "building_footprints.zip",
     function(p)
         st_read(paste0("/vsizip/", p)))
