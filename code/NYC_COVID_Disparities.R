@@ -48,7 +48,7 @@ read_w_filenames <- function(flnm) {
 }
 
 extract_waic <- function (stanfit){
-  log_lik <- extract(stanfit, "log_lik")$log_lik
+  log_lik <- rstan::extract(stanfit, "log_lik")$log_lik
   dim(log_lik) <- if (length(dim(log_lik)) == 1) 
     c(length(log_lik), 1)
   else c(dim(log_lik)[1], prod(dim(log_lik)[2:length(dim(log_lik))]))
