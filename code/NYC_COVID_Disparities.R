@@ -573,7 +573,9 @@ colnames(BWQS_predicted_infection_median_testing) <- "predicted"
 
 # Visualize the relationship between BWQS index and infection rate
 BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
-  geom_line(aes(y = predicted)) + scale_x_continuous("BWQS Index") + scale_y_continuous("Infections per 100,000")
+  geom_line(aes(y = predicted)) + 
+  scale_x_continuous("BWQS infection risk index") + 
+  scale_y_continuous("Infections per 100,000", label=comma)
 BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", xparams = list(binwidth = 1), yparams = list(binwidth = 200))
 BWQS_scatter
 if(export.figs) {
@@ -591,7 +593,7 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
   scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
   #theme_bw(base_size = 15) + 
   theme_bw(base_size = 5) + 
-  labs(fill = "Infection Risk Index") +
+  labs(fill = "BWQS infection risk index") +
   theme(legend.title = element_text(face = "bold", size = 7), 
         #legend.position = c(0.25, 0.8), 
         panel.background = element_rect(fill = "#dedede"), 
@@ -816,13 +818,11 @@ fig5 <- ggplot() +
   geom_ribbon(data = subset(Subway_BWQS_df1, Risk == "High"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_ribbon(data = subset(Subway_BWQS_df1, Risk == "Low"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_line(data = Subway_BWQS_df1, aes(x = date, y = Prediction, color = Risk)) +
-  scale_x_date(limits = c(date("2020-02-16"), date("2020-04-30")), date_minor_breaks = "1 week") + 
-  xlab("Date") +
-  ylab("Relative Subway Ridership (%)") + 
+  scale_x_date("Date", limits = c(date("2020-02-16"), date("2020-04-30")), date_minor_breaks = "1 week") + 
+  scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent, limits = c(0, 1.1)) + 
   geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
   theme_bw(base_size = 16) +
-  theme(legend.title = element_text(face = "bold"), legend.position = c(0.9, 0.7)) + 
-  scale_y_continuous(limits = c(0, 1.1))
+  theme(legend.title = element_text(face = "bold"), legend.position = c(0.9, 0.7))
 fig5 
 if(export.figs) ggsave(fig5, filename = here("figures", paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
 
