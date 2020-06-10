@@ -31,6 +31,8 @@ here() # current working directory
 ##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
 #census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
 
+export.figs = FALSE
+
 # data will default to a subfolder "data/" within working directory
 # unless 1. set by an environment variable:
 data.root = Sys.getenv("COVID_DATA")
@@ -545,7 +547,8 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
   theme_set(theme_bw(base_size = 18)) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
-ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 8)
+fig2
+if(export.figs) ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 8)
 
 Cors_SESVars_quantiled <- cor(X, method = "kendall")  
 Cors_SESVars_quantiled1 <- as.data.frame(Cors_SESVars_quantiled)
@@ -573,9 +576,11 @@ BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median
   geom_line(aes(y = predicted)) + scale_x_continuous("BWQS Index") + scale_y_continuous("Infections per 100,000")
 BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", xparams = list(binwidth = 1), yparams = list(binwidth = 200))
 BWQS_scatter
-# png(filename = "bwqs_scatter.png", width = 96*5, height = 96*5)
-#   print(BWQS_scatter)
-# dev.off()
+if(export.figs) {
+  png(filename = here("figures", paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
+  print(BWQS_scatter)
+  dev.off()
+}
 
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
@@ -595,8 +600,8 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
         legend.text = element_text(size = 6),
         legend.key.size = unit(1.1, "lines"))
 
-
-ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 300, device = "png", width = 4, height = 3.7)
+fig3
+if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 300, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data1 %>% rename(zcta = "GEOID") %>%
@@ -634,7 +639,8 @@ fig4 <- ggplot(Demographics_for_ridges,
     scale = 0.95,
     stat =
       "density") 
-ggsave(plot = fig4, filename = here("figures", paste0("fig4","_",Sys.Date(),".png")), dpi = 400, device = "png", width = 8, height = 5)
+fig4
+if(export.figs) ggsave(plot = fig4, filename = here("figures", paste0("fig4","_",Sys.Date(),".png")), dpi = 400, device = "png", width = 8, height = 5)
 
 Below_25th_zctas <- ZCTA_BQWS %>%
   filter(BWQS_index<quantile(BWQS_index, .25))
@@ -704,7 +710,8 @@ sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
         axis.text.y = element_text(size = 16),
         axis.text.x = element_text(size = 16, color = "black"), 
         axis.title.x = element_blank()) 
-ggsave(sfig2, filename = here("figures", paste0("sfig2","_",Sys.Date(),".png")), device = "png", dpi = 500, width = 12, height = 6)
+sfig2
+if(export.figs) ggsave(sfig2, filename = here("figures", paste0("sfig2","_",Sys.Date(),".png")), device = "png", dpi = 500, width = 12, height = 6)
 
 
 
@@ -761,7 +768,8 @@ sfig4 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridersh
   theme_bw(base_size = 16) +
   xlab("Date") +
   ylab("Relative Subway Use (%)")
-ggsave(sfig4, filename = here("figures", paste0("sfig4", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
+sfig4
+if(export.figs) ggsave(sfig4, filename = here("figures", paste0("sfig4", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
 
 #create a dataframe for the analysis 
 service_changes_in_lowsubway_areas <- tibble(date = as.Date(c("2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-15", "2020-02-16", "2020-02-22", "2020-02-23", "2020-02-29", "2020-03-01", "2020-03-07", "2020-03-08", 
@@ -815,7 +823,8 @@ fig5 <- ggplot() +
   theme_bw(base_size = 16) +
   theme(legend.title = element_text(face = "bold"), legend.position = c(0.9, 0.7)) + 
   scale_y_continuous(limits = c(0, 1.1))
-ggsave(fig5, filename = here("figures", paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
+fig5 
+if(export.figs) ggsave(fig5, filename = here("figures", paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
 
 #which ones were dropped?
 included_uhf <- Subway_BWQS_df %>% distinct(UHFCODE)
@@ -831,7 +840,8 @@ sfig3 <- ggplot() +
   geom_sf_text(data = notincluded_uhf_shp, aes(label = NotIncluded), size = 9) +
   xlab("") + ylab("") +
   theme_bw()
-ggsave(sfig3, filename = here("figures", paste0("sfig3", "_", Sys.Date(),".png")), dpi = 500)
+sfig3
+if(export.figs) ggsave(sfig3, filename = here("figures", paste0("sfig3", "_", Sys.Date(),".png")), dpi = 500)
 
 
 
