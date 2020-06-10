@@ -79,26 +79,6 @@ extract_waic <- function (stanfit){
               p_loo = total["p_loo"]))
 }
 
-quantile_split <- function (data, mix_name = mix_name, q, shift = TRUE) {
-  if (shift) {
-    for (i in 1:length(mix_name)) {
-      dat_num = as.numeric(unlist(data[, mix_name[i]]))
-      data[[mix_name[i]]] = cut(dat_num, breaks = unique(quantile(dat_num, 
-                                                                  probs = seq(0, 1, by = 1/q), na.rm = TRUE)), 
-                                labels = FALSE, include.lowest = TRUE) - 1
-    }
-  }
-  else {
-    for (i in 1:length(mix_name)) {
-      dat_num = as.numeric(unlist(data[, mix_name[i]]))
-      data[[mix_name[i]]] = cut(dat_num, breaks = unique(quantile(dat_num, 
-                                                                  probs = seq(0, 1, by = 1/q), na.rm = TRUE)), 
-                                labels = FALSE, include.lowest = TRUE)
-    }
-  }
-  return(data)
-}
-
 download = function(url, to, f, ...){
     download.update.meta(data.root, url, to, f, ...)
 }
@@ -494,7 +474,8 @@ X <- ZCTA_ACS_COVID %>%
   dplyr::select(all_of(SES_vars))
 K <- ZCTA_ACS_COVID %>%
   dplyr::select(testing_ratio)
-X <- quantile_split(data = X, mix = SES_vars, q = 10)
+for (vname in SES_vars)
+    X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10
 data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
 
 data_list = list(N  = NROW(data), 
