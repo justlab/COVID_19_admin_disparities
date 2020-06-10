@@ -545,7 +545,7 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
   theme_set(theme_bw(base_size = 18)) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
-ggsave(fig2, filename = paste0("figures/fig2", "_", Sys.Date(),".png"), dpi = 600, width = 8, height = 8)
+ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 8)
 
 Cors_SESVars_quantiled <- cor(X, method = "kendall")  
 Cors_SESVars_quantiled1 <- as.data.frame(Cors_SESVars_quantiled)
@@ -596,7 +596,7 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
         legend.key.size = unit(1.1, "lines"))
 
 
-ggsave(plot = fig3, filename = paste0("figures/fig3","_",Sys.Date(),".png"), dpi = 300, device = "png", width = 4, height = 3.7)
+ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 300, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data1 %>% rename(zcta = "GEOID") %>%
@@ -634,7 +634,7 @@ fig4 <- ggplot(Demographics_for_ridges,
     scale = 0.95,
     stat =
       "density") 
-ggsave(plot = fig4, filename = paste0("figures/fig4","_",Sys.Date(),".png"), dpi = 400, device = "png", width = 8, height = 5)
+ggsave(plot = fig4, filename = here("figures", paste0("fig4","_",Sys.Date(),".png")), dpi = 400, device = "png", width = 8, height = 5)
 
 Below_25th_zctas <- ZCTA_BQWS %>%
   filter(BWQS_index<quantile(BWQS_index, .25))
@@ -704,7 +704,7 @@ sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
         axis.text.y = element_text(size = 16),
         axis.text.x = element_text(size = 16, color = "black"), 
         axis.title.x = element_blank()) 
-ggsave(sfig2, filename = paste0("figures/sfig2","_",Sys.Date(),".png"), device = "png", dpi = 500, width = 12, height = 6)
+ggsave(sfig2, filename = here("figures", paste0("sfig2","_",Sys.Date(),".png")), device = "png", dpi = 500, width = 12, height = 6)
 
 
 
@@ -761,7 +761,7 @@ sfig4 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridersh
   theme_bw(base_size = 16) +
   xlab("Date") +
   ylab("Relative Subway Use (%)")
-ggsave(sfig4, filename = paste0("figures/sfig4", "_", Sys.Date(), ".png"), device = "png", dpi = 400, width = 8, height = 5)
+ggsave(sfig4, filename = here("figures", paste0("sfig4", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
 
 #create a dataframe for the analysis 
 service_changes_in_lowsubway_areas <- tibble(date = as.Date(c("2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-15", "2020-02-16", "2020-02-22", "2020-02-23", "2020-02-29", "2020-03-01", "2020-03-07", "2020-03-08", 
@@ -815,7 +815,7 @@ fig5 <- ggplot() +
   theme_bw(base_size = 16) +
   theme(legend.title = element_text(face = "bold"), legend.position = c(0.9, 0.7)) + 
   scale_y_continuous(limits = c(0, 1.1))
-ggsave(fig5, filename = paste0("figures/fig5", "_", Sys.Date() ,".png"), dpi = 600, width = 8, height = 6)
+ggsave(fig5, filename = here("figures", paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
 
 #which ones were dropped?
 included_uhf <- Subway_BWQS_df %>% distinct(UHFCODE)
@@ -831,7 +831,7 @@ sfig3 <- ggplot() +
   geom_sf_text(data = notincluded_uhf_shp, aes(label = NotIncluded), size = 9) +
   xlab("") + ylab("") +
   theme_bw()
-ggsave(sfig3, filename = paste0("figures/sfig3", "_", Sys.Date(),".png"), dpi = 500)
+ggsave(sfig3, filename = here("figures", paste0("sfig3", "_", Sys.Date(),".png")), dpi = 500)
 
 
 
@@ -873,7 +873,7 @@ sfig1b <- ZCTA_BWQS_COVID_shp1 %>%
 sfig1b
 
 sfig1 <- ggarrange(sfig1a, sfig1b, nrow = 1)
-ggexport(sfig1, filename = paste0("figures/sfig1", "_", Sys.Date(),".png"), res = 300, width = 7.3*300, height = 3.7*300)
+ggexport(sfig1, filename = here("figures", paste0("sfig1", "_", Sys.Date(),".png")), res = 300, width = 7.3*300, height = 3.7*300)
 
 #Step 2: Run negative binomial model with spatial filtering  
 
