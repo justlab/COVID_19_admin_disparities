@@ -20,18 +20,22 @@ library(ggpubr)
 library(scales)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
+library(MTA.turnstile)
+
+
+#### SESSION CONFIGURATIONS ####
+
+here() # current working directory
 mta_dir = here("data/mta_turnstile")
 if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
 Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
 if(!dir.exists(here("figures"))) dir.create(here("figures"))
-library(MTA.turnstile)
-
-here() # current working directory
 
 ##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
-#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
+census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
+if(Sys.getenv("CENSUS_API_KEY")=="") "Census API Key Missing"
 
-export.figs = FALSE
+export.figs = FALSE #change to true if you would like to save out figures 
 
 # data will default to a subfolder "data/" within working directory
 # unless 1. set by an environment variable:
@@ -41,6 +45,7 @@ if (data.root == "") data.root = "data"
 if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
 print(paste("data being downloaded into directory", dQuote(data.root)))
 if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == "") message("MTA turnstile processing in a temp directory. To cache persistently set an environment variable 'MTA_TURNSTILE_DATA_DIR'. See also ?usethis::edit_r_environ()")
+
 
 ##### FUNCTIONS ####
 
@@ -603,7 +608,7 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
         legend.key.size = unit(1.1, "lines"))
 
 fig3
-if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 300, device = "png", width = 4, height = 3.7)
+if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 300, device = "png", width = 4.5, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data1 %>% rename(zcta = "GEOID") %>%
