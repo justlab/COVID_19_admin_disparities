@@ -525,7 +525,7 @@ BWQS_fits <- BWQS_params %>%
                                          if_else(label == "avg_hhold_size"|label == "res_vol_popdensity", "Population\nDensity", "Unmatched")))),
                         levels = c("Commuting and\nEssential Work", "Finances &\nAccess to care", "Population\nDensity", "Food\nAccess")))
 
-labels1 <- c("one_over_medincome" = "1/\nmedian income", 
+labels1 <- c("one_over_medincome" = "1/\nMedian income", 
              "not_insured" = "Uninsured", 
              "unemployed" = "Unemployed", 
              "one_over_grocers_per_1000" = "1/\nGrocers per 1000",
@@ -537,7 +537,7 @@ labels1 <- c("one_over_medincome" = "1/\nmedian income",
              "avg_hhold_size" = "Average people\nper household")
 
 
-fig2 <- ggplot(data=BWQS_fits, aes(x=label, y=mean, ymin=lower, ymax=upper)) +
+fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, ymax=upper)) +
   geom_pointrange() + 
   coord_flip() + 
   xlab("") + 
@@ -546,7 +546,7 @@ fig2 <- ggplot(data=BWQS_fits, aes(x=label, y=mean, ymin=lower, ymax=upper)) +
   theme_set(theme_bw(base_size = 18)) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
-ggsave(fig2, filename = "figures/fig2.png", dpi = 600, width = 8, height = 8)
+ggsave(fig2, filename = paste0("figures/fig2", "_", Sys.Date(),".png"), dpi = 600, width = 8, height = 8)
 
 Cors_SESVars_quantiled <- cor(X, method = "kendall")  
 Cors_SESVars_quantiled1 <- as.data.frame(Cors_SESVars_quantiled)
@@ -597,7 +597,7 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
         legend.key.size = unit(1.1, "lines"))
 
 
-ggsave(plot = fig3, filename = "figures/fig3.png", dpi = 300, device = "png", width = 4, height = 3.7)
+ggsave(plot = fig3, filename = paste0("figures/fig3","_",Sys.Date(),".png"), dpi = 300, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data1 %>% rename(zcta = "GEOID") %>%
@@ -635,7 +635,7 @@ fig4 <- ggplot(Demographics_for_ridges,
     scale = 0.95,
     stat =
       "density") 
-ggsave(plot = fig4, filename = "figures/fig4.png", dpi = 400, device = "png", width = 8, height = 5)
+ggsave(plot = fig4, filename = paste0("figures/fig4","_",Sys.Date(),".png"), dpi = 400, device = "png", width = 8, height = 5)
 
 Below_25th_zctas <- ZCTA_BQWS %>%
   filter(BWQS_index<quantile(BWQS_index, .25))
@@ -705,7 +705,7 @@ sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
         axis.text.y = element_text(size = 16),
         axis.text.x = element_text(size = 16, color = "black"), 
         axis.title.x = element_blank()) 
-ggsave(sfig2, filename = "figures/sfig2.png", device = "png", dpi = 500, width = 12, height = 6)
+ggsave(sfig2, filename = paste0("figures/sfig2","_",Sys.Date(),".png"), device = "png", dpi = 500, width = 12, height = 6)
 
 
 
@@ -754,7 +754,7 @@ handler <- function(w) if( any( grepl( "Recycling array of length 1 in array-vec
   invokeRestart( "muffleWarning" )
 
 DRM_mean_predictions <- bind_cols(Mean_Ridership,
-                                  as.tibble(withCallingHandlers(predict(fit_drm_w2.4, interval = "confidence"), warning = handler ))) 
+                                  as_tibble(withCallingHandlers(predict(fit_drm_w2.4, interval = "confidence"), warning = handler ))) 
 
 sfig4 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage.median.ratio)) + 
   geom_ribbon(data = DRM_mean_predictions, aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50", alpha = .5) +
@@ -762,7 +762,7 @@ sfig4 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridersh
   theme_bw(base_size = 16) +
   xlab("Date") +
   ylab("Relative Subway Use (%)")
-ggsave(sfig4, filename = "figures/sfig4.png", device = "png", dpi = 400, width = 8, height = 5)
+ggsave(sfig4, filename = paste0("figures/sfig4", "_", Sys.Date(), ".png"), device = "png", dpi = 400, width = 8, height = 5)
 
 #create a dataframe for the analysis 
 service_changes_in_lowsubway_areas <- tibble(date = as.Date(c("2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-15", "2020-02-16", "2020-02-22", "2020-02-23", "2020-02-29", "2020-03-01", "2020-03-07", "2020-03-08", 
@@ -816,7 +816,7 @@ fig5 <- ggplot() +
   theme_bw(base_size = 16) +
   theme(legend.title = element_text(face = "bold"), legend.position = c(0.9, 0.7)) + 
   scale_y_continuous(limits = c(0, 1.1))
-ggsave(fig5, filename = "figures/fig5.png", dpi = 600, width = 8, height = 6)
+ggsave(fig5, filename = paste0("figures/fig5", "_", Sys.Date() ,".png"), dpi = 600, width = 8, height = 6)
 
 #which ones were dropped?
 included_uhf <- Subway_BWQS_df %>% distinct(UHFCODE)
@@ -832,7 +832,7 @@ sfig3 <- ggplot() +
   geom_sf_text(data = notincluded_uhf_shp, aes(label = NotIncluded), size = 9) +
   xlab("") + ylab("") +
   theme_bw()
-ggsave(sfig3, filename = "figures/sfig3.png", dpi = 500)
+ggsave(sfig3, filename = paste0("figures/sfig3", "_", Sys.Date(),".png"), dpi = 500)
 
 
 
@@ -873,9 +873,8 @@ sfig1b <- ZCTA_BWQS_COVID_shp1 %>%
         )
 sfig1b
 
-sfig1 <- ggarrange(plots = list(sfig1a, sfig1b), nrow = 1, padding = unit(0, "pt"))
 sfig1 <- ggarrange(sfig1a, sfig1b, nrow = 1)
-ggexport(sfig1, filename = "figures/sfig1.png", res = 300, width = 7.3*300, height = 3.7*300)
+ggexport(sfig1, filename = paste0("figures/sfig1", "_", Sys.Date(),".png"), res = 300, width = 7.3*300, height = 3.7*300)
 
 #Step 2: Run negative binomial model with spatial filtering  
 
