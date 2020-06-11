@@ -818,18 +818,20 @@ fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, i
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
 Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
-  filter(date>"2020-02-16") #subsetting for visualization
+  filter(date>"2020-02-16") %>% #subsetting for visualization
+  mutate(Risk = if_else(Risk == "High", "High (above median)", "Low (below median)"))
 
 fig5 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_df2, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
-  geom_ribbon(data = subset(Subway_BWQS_df2, Risk == "High"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
-  geom_ribbon(data = subset(Subway_BWQS_df2, Risk == "Low"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_ribbon(data = subset(Subway_BWQS_df2, Risk == "High (above median)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_ribbon(data = subset(Subway_BWQS_df2, Risk == "Low (below median)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_line(data = Subway_BWQS_df2, aes(x = date, y = Prediction, color = Risk)) +
   scale_x_date("Date", date_minor_breaks = "1 week") + 
   scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent) + 
   geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
   theme_bw(base_size = 16) +
-  theme(legend.title = element_text(face = "bold"), legend.position = c(0.9, 0.7))
+  labs(colour="BWQS Infection Risk Index") +
+  theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 fig5 
 if(export.figs) ggsave(fig5, filename = here("figures", paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
 
