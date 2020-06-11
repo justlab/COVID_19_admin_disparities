@@ -600,7 +600,6 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
   theme_bw(base_size = 5) + 
   labs(fill = "BWQS infection risk index") +
   theme(legend.title = element_text(face = "bold", size = 7), 
-        #legend.position = c(0.25, 0.8), 
         panel.background = element_rect(fill = "#dedede"), 
         legend.background = element_rect(fill = "transparent"),
         legend.position = c(0.25, 0.80),
@@ -644,8 +643,7 @@ fig4 <- ggplot(Demographics_for_ridges,
     aes(height = ..density..,  
         weight = Population / sum(Population)),
     scale = 0.95,
-    stat =
-      "density") 
+    stat ="density") 
 fig4
 if(export.figs) ggsave(plot = fig4, filename = here("figures", paste0("fig4","_",Sys.Date(),".png")), dpi = 400, device = "png", width = 8, height = 5)
 
@@ -820,7 +818,7 @@ fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, i
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
 Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
-  filter(date>="2020-02-16") #subsetting for visualization
+  filter(date>"2020-02-16") #subsetting for visualization
 
 fig5 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_df2, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
@@ -828,7 +826,7 @@ fig5 <- ggplot() +
   geom_ribbon(data = subset(Subway_BWQS_df2, Risk == "Low"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_line(data = Subway_BWQS_df2, aes(x = date, y = Prediction, color = Risk)) +
   scale_x_date("Date", date_minor_breaks = "1 week") + 
-  scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent, limits = c(0, 1.1)) + 
+  scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent) + 
   geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
   theme_bw(base_size = 16) +
   theme(legend.title = element_text(face = "bold"), legend.position = c(0.9, 0.7))
