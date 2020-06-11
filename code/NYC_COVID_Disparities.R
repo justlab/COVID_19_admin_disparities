@@ -30,6 +30,9 @@ mta_dir = here("data/mta_turnstile")
 if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
 Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
 if(!dir.exists(here("figures"))) dir.create(here("figures"))
+pairmemo.dir = here("data/pairmemo")
+dir.create(pairmemo.dir, showWarnings = F)
+library(MTA.turnstile)
 
 ##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
 #census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
@@ -486,12 +489,15 @@ data_list = list(N  = NROW(data),
                  Dalp = rep(1,length(SES_vars)), 
                  y = as.vector(data$y))
 
-m1 = stan(file = BWQS_stan_model,
+stan.model = function()
+     stan(file = BWQS_stan_model,
                          data = data_list, chains = 1,
                          warmup = 2500, iter = 20000, cores = 1,
                          thin = 10, refresh = 0, algorithm = "NUTS",
                          seed = 1234, control = list(max_treedepth = 20,
                                                      adapt_delta = 0.999999999999999))
+stan.model = pairmemo(stan.model, pairmemo.dir)
+m1 = stan.model()
 # detach("package:raster", unload = TRUE) # may be needed
 extract_waic(m1)
 
