@@ -904,10 +904,10 @@ ny.nb4 <- make.sym.nb(ny.nb4)
 ny.wt4 <- nb2listw(ny.nb4, style="W")
 
 #Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
-fit.nb.ny<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index, spdat)
+fit.nb.ny<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index, spdat)
 lm.morantest(fit.nb.ny, listw = ny.wt4)
-me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index,
-           spdat@data, family=negative.binomial(6.804), listw = ny.wt4, verbose=T, alpha=.1, nsim = 999)
+me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index,
+                         spdat@data, family=negative.binomial(6.804), listw = ny.wt4, verbose=T, alpha=.1, nsim = 999)
 
 #Step 2c: Pull out these fits and visualize the autocorrelation
 fits <- data.frame(fitted(me.fit))
@@ -915,7 +915,7 @@ spdat$me22 <- fits$vec22
 spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
 
 #Step 2d: Include the fits in our regression model as an additional parameter
-clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus)+BWQS_index+fitted(me.fit), spdat@data)
+clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index+fitted(me.fit), spdat@data)
 tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
 as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
 lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
