@@ -32,7 +32,7 @@ Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
 if(!dir.exists(here("figures"))) dir.create(here("figures"))
 
 ##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
-census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
+#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
 if(Sys.getenv("CENSUS_API_KEY")=="") "Census API Key Missing"
 
 export.figs = FALSE #change to true if you would like to save out figures 
@@ -603,12 +603,12 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
         #legend.position = c(0.25, 0.8), 
         panel.background = element_rect(fill = "#dedede"), 
         legend.background = element_rect(fill = "transparent"),
-        legend.position = c(0.15, 0.80),
+        legend.position = c(0.25, 0.80),
         legend.text = element_text(size = 6),
         legend.key.size = unit(1.1, "lines"))
 
 fig3
-if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 300, device = "png", width = 4.5, height = 3.7)
+if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 600, device = "png", width = 4.5, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data1 %>% rename(zcta = "GEOID") %>%
@@ -638,7 +638,7 @@ Demographics_for_ridges %>%
 
 fig4 <- ggplot(Demographics_for_ridges,
        aes(x = BWQS_index, y = `Race/Ethnicity`)) + 
-  xlab("BWQS Index")+
+  xlab("BWQS infection risk index")+
   theme(legend.position = "none") +
   geom_density_ridges(
     aes(height = ..density..,  
@@ -800,7 +800,8 @@ anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the inter
 
 summary(fit_drm_interact)
 confint(fit_drm_interact)
-
+compParm(fit_drm_interact, "b", "-")
+compParm(fit_drm_interact, "c", "-")
 #b is not actually a slope - but a scaling factor that needs to be transformed into the slope
 slopes <- as_tibble(coef(fit_drm_interact), rownames = "vars") %>%
   separate(col = vars, into = c("vars", "BWQS_risk"), sep = ":") %>%
@@ -818,12 +819,15 @@ as_tibble(confint(fit_drm_interact), rownames = "vars") %>%
 fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler ))
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
+Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
+  filter(date>="2020-02-16") #subsetting for visualization
+
 fig5 <- ggplot() + 
-  geom_jitter(data = Subway_BWQS_df1, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
-  geom_ribbon(data = subset(Subway_BWQS_df1, Risk == "High"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
-  geom_ribbon(data = subset(Subway_BWQS_df1, Risk == "Low"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
-  geom_line(data = Subway_BWQS_df1, aes(x = date, y = Prediction, color = Risk)) +
-  scale_x_date("Date", limits = c(date("2020-02-16"), date("2020-04-30")), date_minor_breaks = "1 week") + 
+  geom_jitter(data = Subway_BWQS_df2, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
+  geom_ribbon(data = subset(Subway_BWQS_df2, Risk == "High"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_ribbon(data = subset(Subway_BWQS_df2, Risk == "Low"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_line(data = Subway_BWQS_df2, aes(x = date, y = Prediction, color = Risk)) +
+  scale_x_date("Date", date_minor_breaks = "1 week") + 
   scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent, limits = c(0, 1.1)) + 
   geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
   theme_bw(base_size = 16) +
