@@ -18,6 +18,7 @@ library(matrixStats)
 library(egg)
 library(ggpubr)
 library(scales)
+library(qs)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 library(MTA.turnstile)
@@ -91,20 +92,30 @@ download = function(url, to, f, ...){
 
 
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
-Pluto = download(
+get.Pluto = function() download(
     "https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc_pluto_20v3_csv.zip",
     "pluto.zip",
     function(p)
         read_csv(unz(p, "pluto_20v3.csv"), col_types = cols(spdist2 = col_character(), 
                                                 overlay2 = col_character(),
-                                                zonedist4 = col_character())))
+                                                zonedist4 = col_character()))[,
+            c("landuse", "bbl", "numfloors", "unitstotal", "unitsres",
+                "zipcode")])
+get.Pluto = pairmemo(get.Pluto, pairmemo.dir, fst = T)
+Pluto <- as.data.frame(get.Pluto())
 
-Bldg_Footprints <- download(
-  # https://data.cityofnewyork.us/Housing-Development/Building-Footprints/nqwf-w8eh
-    "https://data.cityofnewyork.us/api/geospatial/nqwf-w8eh?method=export&format=Shapefile",
-    "building_footprints.zip",
-    function(p)
-        st_read(paste0("/vsizip/", p)))
+
+{if (file.exists(here("data", "Bldg_Footprints.qs")))
+    Bldg_Footprints <- qread(here("data", "Bldg_Footprints.qs"))
+else {
+   Bldg_Footprints <- download(
+      # https://data.cityofnewyork.us/Housing-Development/Building-Footprints/nqwf-w8eh
+        "https://data.cityofnewyork.us/api/geospatial/nqwf-w8eh?method=export&format=Shapefile",
+        "building_footprints.zip",
+        function(p)
+            st_read(paste0("/vsizip/", p)))
+    qsave(Bldg_Footprints, here("data", "Bldg_Footprints.qs"))
+}}
 
 ZCTA_by_boro <- download(
     "https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm",
@@ -206,59 +217,62 @@ BWQS_stan_model <- here("code", "nb_bwqs_cov.stan")
 
 ####Census Data Collection and Cleaning####
 
-ACS_Data <- get_acs(geography = "zcta", 
-        variables = c(medincome = "B19013_001",
-                      total_pop1 = "B01003_001",
-                      fpl_100 = "B06012_002", 
-                      fpl_100to150 = "B06012_003",
-                      median_rent = "B25031_001",
-                      total_hholds1 = "B22003_001",
-                      hholds_snap = "B22003_002",
-                      over16total_industry1 = "C24050_001",
-                      ag_industry = "C24050_002",
-                      construct_industry = "C24050_003",
-                      manufact_industry = "C24050_004",
-                      wholesaletrade_industry = "C24050_005",
-                      retail_industry = "C24050_006",
-                      transpo_and_utilities_industry = "C24050_007",
-                      information_industry = "C24050_008",
-                      finance_and_realestate_industry = "C24050_009",
-                      science_mngmt_admin_industry = "C24050_010",
-                      edu_health_socasst_industry = "C24050_011",
-                      arts_entertain_rec_accomodate_industry = "C24050_012",
-                      othsvcs_industry = "C24050_013",
-                      publicadmin_industry = "C24050_014",
-                      total_commute1 = "B08301_001",
-                      drove_commute = "B08301_002",
-                      pubtrans_bus_commute = "B08301_011",
-                      pubtrans_subway_commute = "B08301_013",
-                      pubtrans_railroad_commute = "B08301_013",
-                      pubtrans_ferry_commute = "B08301_015",
-                      taxi_commute = "B08301_016",
-                      bicycle_commute = "B08301_018",
-                      walked_commute = "B08301_019",
-                      workhome_commute = "B08301_021",
-                      unemployed = "B23025_005",
-                      under19_noinsurance = "B27010_017",
-                      age19_34_noinsurance = "B27010_033",
-                      age35_64_noinsurance = "B27010_050",
-                      age65plus_noinsurance = "B27010_066",
-                      hisplat_raceethnic = "B03002_012",
-                      nonhispLat_white_raceethnic = "B03002_003",
-                      nonhispLat_black_raceethnic = "B03002_004",
-                      nonhispLat_amerindian_raceethnic = "B03002_005",
-                      nonhispLat_asian_raceethnic = "B03002_006",
-                      age65_plus  = "B08101_008"),
-        year = 2018,
-        output = "wide",
-        survey = "acs5")
+acs.f = function() {
+    ACS_Data <- get_acs(geography = "zcta", 
+            variables = c(medincome = "B19013_001",
+                          total_pop1 = "B01003_001",
+                          fpl_100 = "B06012_002", 
+                          fpl_100to150 = "B06012_003",
+                          median_rent = "B25031_001",
+                          total_hholds1 = "B22003_001",
+                          hholds_snap = "B22003_002",
+                          over16total_industry1 = "C24050_001",
+                          ag_industry = "C24050_002",
+                          construct_industry = "C24050_003",
+                          manufact_industry = "C24050_004",
+                          wholesaletrade_industry = "C24050_005",
+                          retail_industry = "C24050_006",
+                          transpo_and_utilities_industry = "C24050_007",
+                          information_industry = "C24050_008",
+                          finance_and_realestate_industry = "C24050_009",
+                          science_mngmt_admin_industry = "C24050_010",
+                          edu_health_socasst_industry = "C24050_011",
+                          arts_entertain_rec_accomodate_industry = "C24050_012",
+                          othsvcs_industry = "C24050_013",
+                          publicadmin_industry = "C24050_014",
+                          total_commute1 = "B08301_001",
+                          drove_commute = "B08301_002",
+                          pubtrans_bus_commute = "B08301_011",
+                          pubtrans_subway_commute = "B08301_013",
+                          pubtrans_railroad_commute = "B08301_013",
+                          pubtrans_ferry_commute = "B08301_015",
+                          taxi_commute = "B08301_016",
+                          bicycle_commute = "B08301_018",
+                          walked_commute = "B08301_019",
+                          workhome_commute = "B08301_021",
+                          unemployed = "B23025_005",
+                          under19_noinsurance = "B27010_017",
+                          age19_34_noinsurance = "B27010_033",
+                          age35_64_noinsurance = "B27010_050",
+                          age65plus_noinsurance = "B27010_066",
+                          hisplat_raceethnic = "B03002_012",
+                          nonhispLat_white_raceethnic = "B03002_003",
+                          nonhispLat_black_raceethnic = "B03002_004",
+                          nonhispLat_amerindian_raceethnic = "B03002_005",
+                          nonhispLat_asian_raceethnic = "B03002_006",
+                          age65_plus  = "B08101_008"),
+            year = 2018,
+            output = "wide",
+            survey = "acs5")
 
-ACS_Data1 <- ACS_Data %>% #only pull out the estimates and cleaning variable names
-  filter(GEOID %in% ZCTAs_in_NYC) %>%
-  dplyr::select(-NAME)  %>%
-  dplyr::select(GEOID, !ends_with("M")) %>%
-  rename_at(vars(ends_with("E")), .funs = list(~str_sub(., end = -2)))
-
+    ACS_Data %>% #only pull out the estimates and cleaning variable names
+      filter(GEOID %in% ZCTAs_in_NYC) %>%
+      dplyr::select(-NAME)  %>%
+      dplyr::select(GEOID, !ends_with("M")) %>%
+      rename_at(vars(ends_with("E")), .funs = list(~str_sub(., end = -2)))
+}
+acs.f = pairmemo(acs.f, pairmemo.dir, fst = T)
+ACS_Data1 <- as.data.frame(acs.f())
 
 ACS_Data2 <- ACS_Data1 %>%
   mutate_at(vars(ends_with("_commute")), ~round((./total_commute1)*100, 2)) %>% #proportion of people relying on a given mode of transit
@@ -275,32 +289,35 @@ ACS_Data2 <- ACS_Data1 %>%
 
 #### Estimating the mode of transportation for essential workers ####
 
-ACS_EssentialWrkr_Commute <- get_acs(geography = "zcta", #pull down the relevant categories 
-                                     variables = c(ag_car1_commute = "B08126_017",
-                                                   ag_pubtrans_commute = "B08126_047",
-                                                   construct_car1_commute ="B08126_018",
-                                                   construct_pubtrans_commute = "B08126_048",
-                                                   wholesale_car1_commute = "B08126_020",
-                                                   wholesale_pubtrans_commute = "B08126_050",
-                                                   transpo_car1_commute = "B08126_022",
-                                                   transpo_pubtrans_commute = "B08126_052",
-                                                   ed_hlthcare_car1_commute = "B08126_026",
-                                                   ed_hlthcare_pubtrans_commute = "B08126_056"),
-                                     year = 2018, 
-                                     output = "wide",
-                                     survey = "acs5")
+acs.f2 = function() {
+    ACS_EssentialWrkr_Commute <- get_acs(geography = "zcta", #pull down the relevant categories 
+                                         variables = c(ag_car1_commute = "B08126_017",
+                                                       ag_pubtrans_commute = "B08126_047",
+                                                       construct_car1_commute ="B08126_018",
+                                                       construct_pubtrans_commute = "B08126_048",
+                                                       wholesale_car1_commute = "B08126_020",
+                                                       wholesale_pubtrans_commute = "B08126_050",
+                                                       transpo_car1_commute = "B08126_022",
+                                                       transpo_pubtrans_commute = "B08126_052",
+                                                       ed_hlthcare_car1_commute = "B08126_026",
+                                                       ed_hlthcare_pubtrans_commute = "B08126_056"),
+                                         year = 2018, 
+                                         output = "wide",
+                                         survey = "acs5")
 
 
-ACS_EssentialWrkr_Commute1 <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
-  dplyr::select(-ends_with("M"), -NAME) %>%
-  filter(GEOID %in% ZCTAs_in_NYC) %>%
-  mutate_at(vars(starts_with("ed_hlthcare")), ~round(./2), 0) %>% #maintain same proportions as estimated nonquarintined jobs
-  mutate_at(vars(starts_with("construct")), ~round(./4), 0) %>%
-  mutate(essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))), 
-         essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
-  rename(zcta = GEOID) %>%
-  dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans)
-
+    ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
+      dplyr::select(-ends_with("M"), -NAME) %>%
+      filter(GEOID %in% ZCTAs_in_NYC) %>%
+      mutate_at(vars(starts_with("ed_hlthcare")), ~round(./2), 0) %>% #maintain same proportions as estimated nonquarintined jobs
+      mutate_at(vars(starts_with("construct")), ~round(./4), 0) %>%
+      mutate(essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))), 
+             essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
+      rename(zcta = GEOID) %>%
+      dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans)
+}
+acs.f2 = pairmemo(acs.f2, pairmemo.dir, fst = T)
+ACS_EssentialWrkr_Commute1 = as.data.frame(acs.f2())
 
 #### Identify the number of supermarkets/grocery stores per area ####
 non_supermarket_strings <- c("DELI|TOBACCO|GAS|CANDY|7 ELEVEN|7-ELEVEN|LIQUOR|ALCOHOL|BAKERY|CHOCOLATE|DUANE READE|WALGREENS|CVS|RITE AID|RAVIOLI|WINERY|WINE|BEER|CAFE|COFFEE")
