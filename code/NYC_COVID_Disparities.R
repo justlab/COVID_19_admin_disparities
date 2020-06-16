@@ -796,7 +796,7 @@ Subway_BWQS_df <- Subway_ridership_by_UHF %>%
   anti_join(., service_changes_in_lowsubway_areas, by = c("date", "place")) #removing low outliers due to service changes in low subway density areas
 
 fit_drm_all <- drm(usage.median.ratio ~ time_index, fct = W2.4(), data = Subway_BWQS_df)
-fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df)
+fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = T)
 
 anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
 
