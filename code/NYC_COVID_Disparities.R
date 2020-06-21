@@ -18,35 +18,37 @@ library(matrixStats)
 library(egg)
 library(ggpubr)
 library(scales)
+
+#### SESSION CONFIGURATIONS ####
+here() # current working directory
+# if not already set via an environment variable, cache MTA turnstile data within the working directory
+if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){
+  mta_dir = here("data/mta_turnstile")
+  if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
+  Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
+} 
 ## R packages available from GitHub respositories via: 
 #remotes::install_github("justlab/Just_universal", ref = "78812f519da11502706a5061e7b8bc4812e5c3b5") 
 #remotes::install_github("justlab/MTA_turnstile", ref = "6c8bd7690dfa6036bf991cb4504f42631e8f6756")
 library(Just.universal) 
-library(MTA.turnstile)
+library(MTA.turnstile) # if not already set, this will process MTA data in a temporary directory
 
-
-#### SESSION CONFIGURATIONS ####
-
-here() # current working directory
-mta_dir = here("data/mta_turnstile")
-if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
-Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
 if(!dir.exists(here("figures"))) dir.create(here("figures"))
+Sys.time() # print the start time
 
-##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
+##To generate census data, you must set an API key, which you can request here: https://api.census.gov/data/key_signup.html
 #census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
-if(Sys.getenv("CENSUS_API_KEY")=="") "Census API Key Missing"
+if(Sys.getenv("CENSUS_API_KEY")=="") stop("Census API Key Missing. Please see ?census_api_key()")
 
-export.figs = FALSE #change to true if you would like to save out figures 
+export.figs = FALSE #change to TRUE if you would like to save out figures 
 
 # data will default to a subfolder "data/" within working directory
 # unless 1. set by an environment variable:
 data.root = Sys.getenv("COVID_DATA")
 # or 2. set with an alternative path here:
-if (data.root == "") data.root = "data"
-if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
+if (data.root == "") data.root = here("data")
+if (data.root == "data" & !dir.exists(data.root)) dir.create(here("data"))
 print(paste("data being downloaded into directory", dQuote(data.root)))
-if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == "") message("MTA turnstile processing in a temp directory. To cache persistently set an environment variable 'MTA_TURNSTILE_DATA_DIR'. See also ?usethis::edit_r_environ()")
 
 
 ##### FUNCTIONS ####
@@ -554,7 +556,7 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
   theme_set(theme_bw(base_size = 18)) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
-fig2
+print(fig2)
 if(export.figs) ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 8)
 
 Cors_SESVars_quantiled <- cor(X, method = "kendall")  
@@ -584,7 +586,7 @@ BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median
   scale_x_continuous("BWQS infection risk index") + 
   scale_y_continuous("Infections per 100,000", label=comma)
 BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", xparams = list(binwidth = 1), yparams = list(binwidth = 200))
-BWQS_scatter
+print(BWQS_scatter)
 if(export.figs) {
   png(filename = here("figures", paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
   print(BWQS_scatter)
