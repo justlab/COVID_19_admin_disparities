@@ -18,7 +18,9 @@ library(matrixStats)
 library(egg)
 library(ggpubr)
 library(scales)
-#Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
+## R packages available from GitHub respositories via: 
+#remotes::install_github("justlab/Just_universal", ref = "78812f519da11502706a5061e7b8bc4812e5c3b5") 
+#remotes::install_github("justlab/MTA_turnstile", ref = "6c8bd7690dfa6036bf991cb4504f42631e8f6756")
 library(Just.universal) 
 library(MTA.turnstile)
 
