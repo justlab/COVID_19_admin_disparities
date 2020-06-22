@@ -3,7 +3,7 @@ This repository holds the data-processing and analysis code for the research pro
 Instructions
 ============================================================
  
-All data collection, cleaning, and analysis are conducted via code/NYC_COVID_Disparities.R 
+All data collection, cleaning, and analysis are conducted via code/NYC_COVID_Disparities.R. Before running this code, please be sure to create an API key for the US Census, which can be accessed here: https://api.census.gov/data/key_signup.html. Once you have acquired an API key, please input it into line 40 of your script.
 
 Packages and Installation
 ============================================================
@@ -19,7 +19,7 @@ The following packages are available via remotes::install_github(“justlab/Just
 Example output
 ============================================================
 
-Example output from code/NYC_COVID_Disparities.R is located: ****INSERT LINK HERE. Processing and analysis time on a personal computer was ****INSERT TIME HERE.  
+Example output from code/NYC_COVID_Disparities.R is located: NYC_COVID_Disparities_v1_21June2020.html. Processing and analysis time on a personal computer was approximately 70 minutes.  
 
 License
 ============================================================
