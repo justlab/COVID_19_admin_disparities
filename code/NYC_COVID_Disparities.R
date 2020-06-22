@@ -475,22 +475,23 @@ Cors_SESVars2 <- gather(data = Cors_SESVars1, key = "var2", value = "correlation
 ## Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
 bind_cols(Variables = SES_vars,
           
-        ZCTA_ACS_COVID %>%
+          ZCTA_ACS_COVID %>%
             dplyr::select(all_of(SES_vars), pos_per_100000) %>%
             summarise_at(vars(all_of(SES_vars)), list(~cor(., pos_per_100000, method = "kendall"))) %>%
             t() %>%
-            as_tibble(),
-        
-        ZCTA_ACS_COVID %>%
-          dplyr::select(all_of(SES_vars), pos_per_100000) %>%
-          summarise_at(vars(all_of(SES_vars)), 
-                       list(~cor.test(., pos_per_100000, method = "kendall")$p.value)) %>%
-          t() %>%
-          as_tibble()) %>%
+            as_tibble() %>%
+            rename(`Correlation (Tau)`= "V1"),
+          
+          ZCTA_ACS_COVID %>%
+            dplyr::select(all_of(SES_vars), pos_per_100000) %>%
+            summarise_at(vars(all_of(SES_vars)), 
+                         list(~cor.test(., pos_per_100000, method = "kendall")$p.value)) %>%
+            t() %>%
+            as_tibble() %>%
+            rename(`p value` = "V1")) %>%
   
-  mutate(`Correlation (Tau)` = round(V1, 3),
-         `p value` = as.character(ifelse(V11 < 0.0001, "< 0.0001", round(V11, 3))),) %>%
-  dplyr::select(-V1, -V11) 
+  mutate(`Correlation (Tau)` = round(`Correlation (Tau)`, 3),
+         `p value` = as.character(ifelse(`p value` < 0.0001, "< 0.0001", round(`p value`, 3))),)
 
 #Step 3: Prepare data for BWQS and pass to stan for model fitting 
 y = as.numeric(ZCTA_ACS_COVID$pos_per_100000)
