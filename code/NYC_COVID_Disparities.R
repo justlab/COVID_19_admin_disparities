@@ -33,6 +33,10 @@ Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
 if(!dir.exists(here("figures"))) dir.create(here("figures"))
 pairmemo.dir = here("data/pairmemo")
 dir.create(pairmemo.dir, showWarnings = F)
+pm = function(...) pairmemo(
+    directory = pairmemo.dir,
+    n.frame = 2,
+    ...)
 library(MTA.turnstile)
 
 ##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
@@ -84,7 +88,8 @@ extract_waic <- function (stanfit){
 }
 
 download = function(url, to, f, ...){
-    download.update.meta(data.root, url, to, f, ...)
+    f(download.update.meta(url, file.path(data.root, "downloads"), to, f),
+        ...)
 }
 
 
@@ -92,7 +97,8 @@ download = function(url, to, f, ...){
 
 
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
-get.Pluto = function() download(
+pm(fst = T,
+get.Pluto <- function() download(
     "https://www1.nyc.gov/assets/planning/download/zip/data-maps/open-data/nyc_pluto_20v3_csv.zip",
     "pluto.zip",
     function(p)
@@ -100,8 +106,7 @@ get.Pluto = function() download(
                                                 overlay2 = col_character(),
                                                 zonedist4 = col_character()))[,
             c("landuse", "bbl", "numfloors", "unitstotal", "unitsres",
-                "zipcode")])
-get.Pluto = pairmemo(get.Pluto, pairmemo.dir, fst = T)
+                "zipcode")]))
 Pluto <- as.data.frame(get.Pluto())
 
 
@@ -217,7 +222,8 @@ BWQS_stan_model <- here("code", "nb_bwqs_cov.stan")
 
 ####Census Data Collection and Cleaning####
 
-acs.f = function() {
+pm(fst = T,
+acs.f <- function() {
     ACS_Data <- get_acs(geography = "zcta", 
             variables = c(medincome = "B19013_001",
                           total_pop1 = "B01003_001",
@@ -270,8 +276,7 @@ acs.f = function() {
       dplyr::select(-NAME)  %>%
       dplyr::select(GEOID, !ends_with("M")) %>%
       rename_at(vars(ends_with("E")), .funs = list(~str_sub(., end = -2)))
-}
-acs.f = pairmemo(acs.f, pairmemo.dir, fst = T)
+})
 ACS_Data1 <- as.data.frame(acs.f())
 
 ACS_Data2 <- ACS_Data1 %>%
@@ -289,7 +294,8 @@ ACS_Data2 <- ACS_Data1 %>%
 
 #### Estimating the mode of transportation for essential workers ####
 
-acs.f2 = function() {
+pm(fst = T,
+acs.f2 <- function() {
     ACS_EssentialWrkr_Commute <- get_acs(geography = "zcta", #pull down the relevant categories 
                                          variables = c(ag_car1_commute = "B08126_017",
                                                        ag_pubtrans_commute = "B08126_047",
@@ -315,8 +321,7 @@ acs.f2 = function() {
              essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
       rename(zcta = GEOID) %>%
       dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans)
-}
-acs.f2 = pairmemo(acs.f2, pairmemo.dir, fst = T)
+})
 ACS_EssentialWrkr_Commute1 = as.data.frame(acs.f2())
 
 #### Identify the number of supermarkets/grocery stores per area ####
@@ -506,14 +511,13 @@ data_list = list(N  = NROW(data),
                  Dalp = rep(1,length(SES_vars)), 
                  y = as.vector(data$y))
 
-stan.model = function()
+pm(stan.model <- function()
      stan(file = BWQS_stan_model,
                          data = data_list, chains = 1,
                          warmup = 2500, iter = 20000, cores = 1,
                          thin = 10, refresh = 0, algorithm = "NUTS",
                          seed = 1234, control = list(max_treedepth = 20,
-                                                     adapt_delta = 0.999999999999999))
-stan.model = pairmemo(stan.model, pairmemo.dir)
+                                                     adapt_delta = 0.999999999999999)))
 m1 = stan.model()
 # detach("package:raster", unload = TRUE) # may be needed
 extract_waic(m1)
