@@ -820,6 +820,7 @@ fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W
 
 anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
 
+library(magic)
 summary(fit_drm_interact)
 confint(fit_drm_interact)
 compParm(fit_drm_interact, "b", "-")
