@@ -625,7 +625,7 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
   theme(legend.title = element_text(face = "bold", size = 7), 
         panel.background = element_rect(fill = "#dedede"), 
         legend.background = element_rect(fill = "transparent"),
-        legend.position = c(0.25, 0.80),
+        legend.position = c(0.20, 0.80),
         legend.text = element_text(size = 6),
         legend.key.size = unit(1.1, "lines"),
         axis.title.y = element_blank(),
