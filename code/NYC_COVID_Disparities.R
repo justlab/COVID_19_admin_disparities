@@ -491,9 +491,9 @@ bind_cols(Variables = SES_vars,
           t() %>%
           as_tibble()) %>%
   
-  mutate(`Correlation (Tau)` = round(V1, 3),
-         `p value` = as.character(ifelse(V11 < 0.0001, "< 0.0001", round(V11, 3))),) %>%
-  dplyr::select(-V1, -V11) 
+  mutate(`Correlation (Tau)` = round(V1...2, 3),
+         `p value` = as.character(ifelse(V1...3 < 0.0001, "< 0.0001", round(V1...3, 3))),) %>%
+  dplyr::select(-V1...2, -V1...3) 
 
 #Step 3: Prepare data for BWQS and pass to stan for model fitting 
 y = as.numeric(ZCTA_ACS_COVID$pos_per_100000)
