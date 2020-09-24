@@ -5,6 +5,7 @@ library(lubridate)
 library(tidycensus)
 library(ggExtra)
 library(ggridges)
+library(ggsn)
 library(rstan)
 library(drc)
 library(spdep)
@@ -398,10 +399,13 @@ sfig1a <- MODZCTA_NYC_shp1 %>%
   ggplot() +
   geom_sf(data = NYC_basemap_shp)+
   geom_sf(aes(fill = pos_per_100000), lwd = 0.2)+
+  scalebar(MODZCTA_NYC_shp1, dist = 5, dist_unit = "km", 
+           transform = TRUE, model = "WGS84", 
+           st.size = 2.3, height = 0.015, border.size = 0.5,
+           anchor = c(x = -73.71, y = 40.51)) + 
   labs(fill = "Positives per 100,000") +
   ggtitle("Cumulative Positive COVID tests by zip code (May 7, 2020)") +
   scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7)) + 
-  theme_bw() +
   theme_bw(base_size = 6) + 
   theme(legend.title = element_text(face = "bold", size = 6), 
         panel.background = element_rect(fill = "#dedede"), 
@@ -409,8 +413,10 @@ sfig1a <- MODZCTA_NYC_shp1 %>%
         legend.position = c(0.15, 0.80),
         legend.text = element_text(size = 6),
         plot.margin = unit(c(4,0,4,0), "pt"),
-        legend.key.size = unit(1.1, "lines"))
-sfig1a 
+        legend.key.size = unit(1.1, "lines"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
+sfig1a
 
 #### Create data frames of all above information ####
 
@@ -602,11 +608,18 @@ if(export.figs) {
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
 #Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
+
+# reproject to WGS84 to be compatible with scalebar
+ZCTA_BWQS_COVID_shp <- st_transform(ZCTA_BWQS_COVID_shp, 4326)
+
 # Figure 3
 fig3 <- ggplot(ZCTA_BWQS_COVID_shp) + 
   geom_sf(aes(fill = BWQS_index), lwd = 0.2) + 
+  scalebar(ZCTA_BWQS_COVID_shp, dist = 5, dist_unit = "km", 
+           transform = TRUE, model = "WGS84", 
+           st.size = 2.3, height = 0.015, border.size = 0.5,
+           anchor = c(x = -73.71, y = 40.51)) + 
   scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
-  #theme_bw(base_size = 15) + 
   theme_bw(base_size = 5) + 
   labs(fill = "BWQS infection risk index") +
   theme(legend.title = element_text(face = "bold", size = 7), 
@@ -614,10 +627,11 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
         legend.background = element_rect(fill = "transparent"),
         legend.position = c(0.25, 0.80),
         legend.text = element_text(size = 6),
-        legend.key.size = unit(1.1, "lines"))
-
+        legend.key.size = unit(1.1, "lines"),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank())
 fig3
-if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 600, device = "png", width = 4.5, height = 3.7)
+if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 600, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data1 %>% rename(zcta = "GEOID") %>%
@@ -897,8 +911,7 @@ sfig1b <- ZCTA_BWQS_COVID_shp1 %>%
         legend.position = c(0.15, 0.80),
         legend.text = element_text(size = 6),
         legend.key.size = unit(1.1, "lines"),
-        plot.margin = unit(c(4,0,4,0), "pt"),
-        )
+        plot.margin = unit(c(4,0,4,0), "pt"))
 sfig1b
 
 sfig1 <- ggarrange(sfig1a, sfig1b, nrow = 1)
