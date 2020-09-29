@@ -20,6 +20,7 @@ library(egg)
 library(ggpubr)
 library(scales)
 library(qs)
+library(readxl)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 
@@ -209,6 +210,12 @@ modzcta_to_zcta <- download(
   "https://raw.githubusercontent.com/nychealth/coronavirus-data/master/Geography-resources/ZCTA-to-MODZCTA.csv",
   "ZCTA-to-MODZCTA.csv",
   read_csv
+)
+# download Tract to ZIP crosswalk from HUD
+tract_to_zip <- download(
+  "https://www.huduser.gov/portal/datasets/usps/TRACT_ZIP_062020.xlsx",
+  "TRACT_ZIP_062020.xlsx",
+  function(p) read_excel(path = p, col_types = c("text", "text", "numeric", "skip", "skip", "skip"))
 )
 
 ##We have many sources of data, so these just help to combine the various data types
