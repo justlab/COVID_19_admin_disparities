@@ -626,8 +626,9 @@ mean(abs(y - BWQS_prediction$predicted))
 # Visualize the relationship between infection rate and test_ratio
 # infections versus testing ratio with smoothers
 ggplot(data.frame(y, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, y)) + geom_point() + 
-  geom_smooth(method = "lm", formula = y ~ splines::ns(x, 3), se = FALSE) + 
-  geom_smooth(color = "red", method = "lm") + geom_smooth(color = "green", method = "gam", se = F)
+  geom_smooth(color = "red", method = "glm.nb") + 
+  stat_smooth(color = "green", method = "gam", formula = y ~ s(x), method.args = list(family = "poisson"), se = F) +
+  geom_smooth(method = "glm.nb", formula = y ~ splines::ns(x, 3), se = FALSE)
 
 # Visualize the relationship between BWQS index and infection rate
 BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
