@@ -21,6 +21,7 @@ library(ggpubr)
 library(scales)
 library(qs)
 library(readxl)
+library(splines)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 
@@ -512,8 +513,7 @@ bind_cols(Variables = SES_vars,
 y = as.numeric(ZCTA_ACS_COVID$pos_per_100000)
 X <- ZCTA_ACS_COVID %>%
   dplyr::select(all_of(SES_vars))
-K <- ZCTA_ACS_COVID %>%
-  dplyr::select(testing_ratio)
+K <- ns(ZCTA_ACS_COVID$testing_ratio, df = 3)
 for (vname in SES_vars)
     X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10
 data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
@@ -537,9 +537,9 @@ m1 = stan.model()
 # detach("package:raster", unload = TRUE) # may be needed
 extract_waic(m1)
 
-vars = c("phi", "beta0", "beta1", "delta1", SES_vars)
-parameters_to_drop <- c("phi", "delta1", "beta0", "beta1")
-number_of_coefficients <- length(SES_vars) + 4
+vars = c("phi", "beta0", "beta1", paste0("delta", 1:3), SES_vars)
+parameters_to_drop <- c("phi", paste0("delta", 1:3), "beta0", "beta1")
+number_of_coefficients <- length(vars)
 
 BWQS_params <- bind_cols(as_tibble(summary(m1)$summary[1:number_of_coefficients,c(1,4,8)]), label = vars)
 
@@ -586,7 +586,7 @@ Cors_SESVars_quantiled2 <- gather(data = Cors_SESVars_quantiled1, key = "var2", 
 
 #Step 4: Use the variable-specific weight on the decile quantile splits to create a 10 point ZCTA-level infection risk score  
 
-BWQS_weights <- as.numeric(summary(m1)$summary[5:number_of_coefficients,c(1)])
+BWQS_weights <- as.numeric(summary(m1)$summary[(length(vars)-length(SES_vars) + 1):number_of_coefficients,c(1)])
 
 ZCTA_ACS_COVID2 <- X*BWQS_weights[col(ZCTA_ACS_COVID)] 
 
@@ -594,10 +594,40 @@ BWQS_index <- ZCTA_ACS_COVID2 %>%
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
   dplyr::select(BWQS_index) 
 
+# extract predictions
+BWQS_prediction = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
+  (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
+   K %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)])
+colnames(BWQS_prediction) <- "predicted"
+
+# predictions at the median testing_ratio
 BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-  (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(K$testing_ratio)))
+   c(predict(K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
+  # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(K$testing_ratio)))
 colnames(BWQS_predicted_infection_median_testing) <- "predicted"
+
+# predictions at the median BWQS index value
+BWQS_prediction_medianbwqs = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
+  (BWQS_params[BWQS_params$label == "beta1", ]$mean * median(BWQS_index$BWQS_index)) + 
+   K %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)])
+colnames(BWQS_prediction_medianbwqs) <- "predicted"
+
+# negative binomial model with linear term for testing_ratio (no BWQS)
+nb_testing_linear<-glm.nb(y~ZCTA_ACS_COVID$testing_ratio)
+mean(abs(y - exp(predict(nb_testing_linear))))
+# negative binomial with spline for testing_ratio (no BWQS)
+nb_testing_ns3df<-glm.nb(y~ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+mean(abs(y - exp(predict(nb_testing_ns3df))))
+
+# mean absolute error of predictions from our full model
+mean(abs(y - BWQS_prediction$predicted))
+
+# Visualize the relationship between infection rate and test_ratio
+# infections versus testing ratio with smoothers
+ggplot(data.frame(y, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, y)) + geom_point() + 
+  geom_smooth(method = "lm", formula = y ~ splines::ns(x, 3), se = FALSE) + 
+  geom_smooth(color = "red", method = "lm") + geom_smooth(color = "green", method = "gam", se = F)
 
 # Visualize the relationship between BWQS index and infection rate
 BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
@@ -923,7 +953,7 @@ sfig1b <- ZCTA_BWQS_COVID_shp1 %>%
 sfig1b
 
 sfig1 <- ggarrange(sfig1a, sfig1b, nrow = 1)
-ggexport(sfig1, filename = here("figures", paste0("sfig1", "_", Sys.Date(),".png")), res = 300, width = 7.3*300, height = 3.7*300)
+if(export.figs) ggexport(sfig1, filename = here("figures", paste0("sfig1", "_", Sys.Date(),".png")), res = 300, width = 7.3*300, height = 3.7*300)
 
 #Step 2: Run negative binomial model with spatial filtering  
 
