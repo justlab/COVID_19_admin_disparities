@@ -268,7 +268,7 @@ Cors_SESVars_median <- cor(SES_zcta_median %>% dplyr::select(-MODZCTA), method =
 Cors_SESVars_median$var1 <- row.names(Cors_SESVars_median)
 Cors_SESVars_median2 <- gather(data = Cors_SESVars_median, key = "var2", value = "correlation", -var1) %>%
   filter(var1 != var2)
-Cors_SESVars_median2 %>% filter(is.na(correlation)) %>% nrow() # 18
+Cors_SESVars_median2 %>% filter(is.na(correlation)) %>% nrow() # 0
 max(Cors_SESVars_median2$correlation, na.rm = T) # 0.6
 
 ## Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
