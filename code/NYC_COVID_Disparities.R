@@ -19,6 +19,7 @@ library(egg)
 library(ggpubr)
 library(scales)
 library(qs)
+library(corrplot)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 
@@ -29,7 +30,7 @@ here() # current working directory
 if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){ # set up default download location for MTA turnstile data
   mta_dir = here("data/mta_turnstile")
   if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
-  Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
+  Sys.setenv(MTA_TURNSTILE_DATA_DIR = here("data/mta_turnstile"))#"/data-coco/MTA_turnstile"
 }
 library(MTA.turnstile)
 
@@ -93,7 +94,6 @@ download = function(url, to, f, ...){
     f(download.update.meta(url, file.path(data.root, "downloads"), to, f),
         ...)
 }
-
 
 ##### Load Data #####
 
@@ -274,14 +274,19 @@ acs.f <- function() {
             survey = "acs5")
 
     ACS_Data %>% #only pull out the estimates and cleaning variable names
-      filter(GEOID %in% ZCTAs_in_NYC) %>%
+      #filter(GEOID %in% ZCTAs_in_NYC) %>%
       dplyr::select(-NAME)  %>%
       dplyr::select(GEOID, !ends_with("M")) %>%
       rename_at(vars(ends_with("E")), .funs = list(~str_sub(., end = -2)))
 })
 ACS_Data1 <- as.data.frame(acs.f())
 
+modzcta_to_zcta1 <- modzcta_to_zcta %>% mutate(ZCTA = as.character(ZCTA))
+
 ACS_Data2 <- ACS_Data1 %>%
+  left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
+  group_by(MODZCTA) %>%
+  summarise_at(vars(medincome:age65_plus), ~sum(.))
   mutate_at(vars(ends_with("_commute")), ~round((./total_commute1)*100, 2)) %>% #proportion of people relying on a given mode of transit
   mutate_at(vars(ends_with("_raceethnic")), ~round((./total_pop1)*100, 2)) %>% #proportion of ppl reporting a given race/ethncity 
   mutate(not_insured = round(((under19_noinsurance + age19_34_noinsurance + age35_64_noinsurance + age65plus_noinsurance) / total_pop1)*100, 2), #proportion uninsured
@@ -434,7 +439,7 @@ ZCTA_ACS_COVID_shp <- MODZCTA_NYC_shp1 %>%
          pos_per_100000 = round(pos_per_100000, 0),
          valid_var = "0",
          didnot_workhome_commute = 1/workhome_commute,
-         one_over_grocers_per_1000 = if_else(is.infinite(1/grocers_per_1000), 0, 1/grocers_per_1000),
+         one_over_grocers_per_1000 = if_else(is.infinite(1/grocers_per_1000), (1/.0293)+1, 1/grocers_per_1000), #max + 1 for zero values
          one_over_medincome = 1/medincome) %>%
   dplyr::select(-pubtrans_subway_commute, -pubtrans_ferry_commute) %>%
   left_join(., ZCTA_by_boro1, by = "zcta") %>%
@@ -472,8 +477,11 @@ Cors_SESVars <- cor(x = ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)), meth
 Cors_SESVars1 <- as.data.frame(Cors_SESVars)
 Cors_SESVars1$var1 <- row.names(Cors_SESVars1)
 Cors_SESVars2 <- gather(data = Cors_SESVars1, key = "var2", value = "correlation", -var1) %>%
-  filter(var1 != var2)
+  filter(var1 != var2) 
 
+Cors_SESVars2 %>% arrange(desc(correlation)) %>% distinct(correlation, .keep_all = T) 
+
+corrplot(Cors_SESVars, p.mat = Cors_SESVars, insig = "p-value", type = "lower", sig.level = -1, tl.col = "black", tl.srt = 45)
 
 ## Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
 bind_cols(Variables = SES_vars,
@@ -585,6 +593,10 @@ BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
   (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(K$testing_ratio)))
 colnames(BWQS_predicted_infection_median_testing) <- "predicted"
+
+BWQS_predicted_infections = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
+                                                (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
+                                                (BWQS_params[BWQS_params$label == "delta1", ]$mean * K$testing_ratio))
 
 # Visualize the relationship between BWQS index and infection rate
 BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
@@ -802,34 +814,58 @@ Subway_BWQS_df <- Subway_ridership_by_UHF %>%
   anti_join(., service_changes_in_lowsubway_areas, by = c("date", "place")) #removing low outliers due to service changes in low subway density areas
 
 fit_drm_all <- drm(usage.median.ratio ~ time_index, fct = W2.4(), data = Subway_BWQS_df)
-fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = T)
+plot(fit_drm_all)
+# fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = T)
 
-anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
+fit_drm_risk_high <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="High")
+fit_drm_risk_low <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="Low")
 
-summary(fit_drm_interact)
-confint(fit_drm_interact)
-compParm(fit_drm_interact, "b", "-")
-compParm(fit_drm_interact, "c", "-")
+# anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
+
+summary(fit_drm_risk_high)
+summary(fit_drm_risk_low)
+
+confint(fit_drm_risk_high)
+confint(fit_drm_risk_low)
+# compParm(fit_drm_interact, "b", "-")
+# compParm(fit_drm_interact, "c", "-")
+
 #b is not actually a slope - but a scaling factor that needs to be transformed into the slope
-slopes <- as_tibble(coef(fit_drm_interact), rownames = "vars") %>%
-  separate(col = vars, into = c("vars", "BWQS_risk"), sep = ":") %>%
+slopes <- as_tibble(coef(fit_drm_risk_high), rownames = "vars") %>%
+  bind_cols(BWQS_risk = "high") %>%
+  bind_rows(as_tibble(coef(fit_drm_risk_low), rownames = "vars") %>% bind_cols(BWQS_risk = "low")) %>%
+  mutate(vars = str_remove(vars, fixed(":(Intercept)"))) %>%
   spread(., vars, value) %>%
-  mutate(slope = -b*(-d/(4*e)))
+  mutate(slope = -b*(-d/(4*e))) 
 
-as_tibble(confint(fit_drm_interact), rownames = "vars") %>%
-  separate(col = vars, into = c("vars", "BWQS_risk"), sep = ":") %>%
+as_tibble(confint(fit_drm_risk_high), rownames = "vars") %>%
+  bind_cols(BWQS_risk = "high") %>%
+  bind_rows(as_tibble(confint(fit_drm_risk_low), rownames = "vars") %>% bind_cols(BWQS_risk = "low")) %>%
+  mutate(vars = str_remove(vars, fixed(":(Intercept)"))) %>%
   filter(vars == "b") %>%
   right_join(., slopes, by = "BWQS_risk") %>%
   mutate(slope_lower_ci = -`2.5 %`*(-d/(4*e)),
          slope_higher_ci = -`97.5 %`*(-d/(4*e))) %>%
   dplyr::select(BWQS_risk, slope, slope_lower_ci, slope_higher_ci)
 
-fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler ))
-Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
+fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_risk_high, interval = "confidence"), warning = handler) %>% 
+                                   bind_cols(., Risk = "High")) %>%
+  #mutate(time_index = row_number()) %>%
+  bind_rows(., as_tibble(withCallingHandlers(predict(fit_drm_risk_low, interval = "confidence"), 
+                                          warning = handler ) %>% bind_cols(., Risk = "Low"))) # %>% mutate(time_index = row_number()) 
+
+ggplot(data = fit_drm_predictions) + geom_ribbon(aes(x = time_index, ymin = Lower, ymax = Upper, group = Risk)) + 
+  geom_line(data = fit_drm_predictions, aes(x = time_index, y = Prediction, color = Risk))
+
+Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df %>% arrange(Risk, date), 
+                             fit_drm_predictions %>% dplyr::select(-Risk)) 
+
+
 
 Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
   filter(date>"2020-02-16") %>% #subsetting for visualization
   mutate(Risk = if_else(Risk == "High", "High (above median)", "Low (below median)"))
+  #distinct(date, .keep_all = T)
 
 fig5 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_df2, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
@@ -908,7 +944,7 @@ ggexport(sfig1, filename = here("figures", paste0("sfig1", "_", Sys.Date(),".png
 
 #Step 2a: Identify the neighbor relationships 
 spdat <- as_Spatial(ZCTA_BWQS_COVID_shp1)
-ny.nb4 <- knearneigh(coordinates(spdat), k=4)
+ny.nb4 <- knearneigh(sp::coordinates(spdat), k=4)
 ny.nb4 <- knn2nb(ny.nb4)
 ny.nb4 <- make.sym.nb(ny.nb4)
 ny.wt4 <- nb2listw(ny.nb4, style="W")
@@ -917,7 +953,7 @@ ny.wt4 <- nb2listw(ny.nb4, style="W")
 fit.nb.ny<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index, spdat)
 lm.morantest(fit.nb.ny, listw = ny.wt4)
 me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index,
-                         spdat@data, family=negative.binomial(6.804), listw = ny.wt4, verbose=T, alpha=.1, nsim = 999)
+                         spdat@data, family=negative.binomial(6.75351), listw = ny.wt4, verbose=T, alpha=.1, nsim = 999)
 
 #Step 2c: Pull out these fits and visualize the autocorrelation
 fits <- data.frame(fitted(me.fit))
@@ -929,6 +965,298 @@ clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop
 tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
 as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
 lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
+spdat$nb_residuals <- clean.nb$residuals
+spplot(spdat, "nb_residuals", at=quantile(spdat$nb_residuals, p=seq(0,1,length.out = 10)))
+ggplot() + geom_sf(data = st_as_sf(spdat),aes(fill = cut_width(nb_residuals, width = 1))) + labs(fill = "Residuals\n(Standard Deviations)")
+
+####  Sensitivity Analyses  ####
+
+##BWQS weights -- stability of the rankings 
+View(as_tibble(extract(m1, c("W[1]","W[2]", "W[3]", "W[4]", "W[5]", "W[6]", "W[7]", "W[8]", "W[9]", "W[10]"))) %>%
+  rownames_to_column("iteration") %>%
+  gather(weight, value, "W[1]":"W[10]") %>%
+  group_by(iteration) %>%
+  slice(which.max(value)) %>%
+  ungroup() %>%
+    group_by(weight) %>%
+    dplyr::summarise(times_largest_weight = n()) %>%
+    mutate(pct_largest_weight = round((times_largest_weight/1750)*100, 2)))
+
+
+##Just using proportion uninsured and median income
+names(ZCTA_ACS_COVID)
+glm_insurance_and_income <- glm.nb(pos_per_100000 ~ not_insured + medincome + testing_ratio, data = ZCTA_ACS_COVID)
+car::vif(glm_insurance_and_income)
+broom::tidy(glm_insurance_and_income)
+plot(glm_insurance_and_income)
+enframe(predict(glm_insurance_and_income)) %>% mutate(value = exp(value))
+
+summary(glm.nb(pos_per_100000 ~ not_insured + medincome, data = ZCTA_ACS_COVID))
+
+
+##PCA of social variables 
+pca_socialvars <- princomp(ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)), cor = T)
+pca_socialvars <- prcomp(ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)), center = T, scale. = T)
+PC1 <- enframe(pca_socialvars$rotation[,1]) %>% arrange(desc(value)) %>% rename("label" = "name")
+
+df_for_PCA_analysis <- ZCTA_ACS_COVID %>% bind_cols(., PC1 = pca_socialvars$x[,1])
+
+BWQS_fits %>%
+  dplyr::select(mean, label) %>%
+  mutate(rank_bwqs = rank(mean)) %>%
+  left_join(., PC1, by = "label") %>%
+  mutate(rank_pca = rank(value)) %>%
+  dplyr::select(2, 3, 5, 1, 4)
+
+glm_princomp <- glm.nb(pos_per_100000 ~ PC1 + testing_ratio, data = df_for_PCA_analysis)
+exp(confint(glm.nb(pos_per_100000 ~ PC1 + testing_ratio, data = df_for_PCA_analysis)))
+
+enframe(predict(glm_princomp)) %>% mutate(glm_princomp = exp(value)) %>% dplyr::select(glm_princomp)
+enframe(predict(glm_insurance_and_income)) %>% mutate(glm_ins_and_income = exp(value)) %>% dplyr::select(glm_ins_and_income)
+
+Compare_Metrics <- bind_cols(ZCTA_ACS_COVID,
+                             glm_princomp = enframe(predict(glm_princomp)) %>% mutate(glm_princomp = exp(value)) %>% dplyr::select(glm_princomp),
+                             glm_ins_and_income = enframe(predict(glm_insurance_and_income)) %>% mutate(glm_ins_and_income = exp(value)) %>% dplyr::select(glm_ins_and_income),
+                             BWQS_index = BWQS_predicted_infections)
+
+
+Compare_Metrics %>% summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_ins_and_income")), ~cor(pos_per_100000, .x, method = "kendall"))
+Compare_Metrics %>% summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_ins_and_income")), ~MAE(pos_per_100000, .x)) 
+
+Compare_Metrics %>% summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_ins_and_income")), ~mean(abs(pos_per_100000-.x)))
+
+##Examining residuals of the BWQS -- map??
+
+##Subway analyses 
+
+#Different BWQS groupings for subway analysis (<.25, .25-.75, .75)
+
+UHF_BWQS_COVID_3split_shp <- UHF_shp %>% 
+  mutate(uhf = as.character(UHFCODE)) %>%
+  left_join(., UHF_BWQS, by = "uhf") %>%
+  mutate(Risk = factor(ifelse(uhf_weighted_bwqs < quantile(uhf_weighted_bwqs, probs = .25, na.rm = T), "Low",
+                              if_else(uhf_weighted_bwqs > quantile(uhf_weighted_bwqs, probs = .75, na.rm = T), "High", "Mid")),
+                       levels = c("High", "Mid", "Low")))
+
+
+Subway_BWQS_3split_df <- Subway_ridership_by_UHF %>%
+  left_join(., st_set_geometry(UHF_BWQS_COVID_3split_shp, NULL), by = c("place" = "uhf")) %>%
+  filter(!is.na(place) & date >= "2020-01-29" & date <= "2020-04-30") %>%
+  group_by(place) %>%
+  arrange(date) %>%
+  mutate(time_index = time(date)) %>%
+  filter(!is.na(Risk) & date != "2020-02-17") %>% #removing Presidents' Day national holiday 
+  anti_join(., service_changes_in_lowsubway_areas, by = c("date", "place")) #removing low outliers due to service changes in low subway density areas
+
+fit_drm_risk_3split <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_3split_df, separate = F)
+anova(fit_drm_all, fit_drm_risk_3split)
+summary(fit_drm_risk_3split)
+compParm(fit_drm_risk_3split, "b", operator = "-")
+compParm(fit_drm_risk_3split, "c", operator = "-")
+plot(fit_drm_risk_3split)
+
+fit_drm_risk_3split_high <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_3split_df, subset = Risk=="High")
+fit_drm_risk_3split_mid <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_3split_df, subset = Risk=="Mid")
+fit_drm_risk_3split_low <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_3split_df, subset = Risk=="Low")
+
+# anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
+
+summary(fit_drm_risk_3split_high)
+summary(fit_drm_risk_3split_mid)
+summary(fit_drm_risk_3split_low)
+
+confint(fit_drm_risk_3split_high)
+confint(fit_drm_risk_3split_mid)
+confint(fit_drm_risk_3split_low)
+
+#b is not actually a slope - but a scaling factor that needs to be transformed into the slope
+slopes_3split <- as_tibble(coef(fit_drm_risk_3split_high), rownames = "vars") %>%
+  bind_cols(BWQS_risk = "high") %>%
+  bind_rows(as_tibble(coef(fit_drm_risk_3split_mid), rownames = "vars") %>% bind_cols(BWQS_risk = "mid")) %>%
+  bind_rows(as_tibble(coef(fit_drm_risk_3split_low), rownames = "vars") %>% bind_cols(BWQS_risk = "low")) %>%
+  mutate(vars = str_remove(vars, fixed(":(Intercept)"))) %>%
+  spread(., vars, value) %>%
+  mutate(slope = -b*(-d/(4*e))) 
+
+as_tibble(confint(fit_drm_risk_3split_high), rownames = "vars") %>%
+  bind_cols(BWQS_risk = "high") %>%
+  bind_rows(as_tibble(confint(fit_drm_risk_3split_mid), rownames = "vars") %>% bind_cols(BWQS_risk = "mid")) %>%
+  bind_rows(as_tibble(confint(fit_drm_risk_3split_low), rownames = "vars") %>% bind_cols(BWQS_risk = "low")) %>%
+  mutate(vars = str_remove(vars, fixed(":(Intercept)"))) %>%
+  filter(vars == "b") %>%
+  right_join(., slopes_3split, by = "BWQS_risk") %>%
+  mutate(slope_lower_ci = -`2.5 %`*(-d/(4*e)),
+         slope_higher_ci = -`97.5 %`*(-d/(4*e))) %>%
+  dplyr::select(BWQS_risk, slope, slope_lower_ci, slope_higher_ci)
+
+fit_drm_predictions_3split <- as_tibble(withCallingHandlers(predict(fit_drm_risk_3split_high, interval = "confidence"), warning = handler) %>% 
+                                   bind_cols(., Risk = "High")) %>%
+  bind_rows(., as_tibble(withCallingHandlers(predict(fit_drm_risk_3split_mid, interval = "confidence"), 
+                                             warning = handler ) %>% bind_cols(., Risk = "Mid"))) %>%
+  bind_rows(., as_tibble(withCallingHandlers(predict(fit_drm_risk_3split_low, interval = "confidence"), 
+                                             warning = handler ) %>% bind_cols(., Risk = "Low")))
+
+Subway_BWQS_3split_df1 <- bind_cols(Subway_BWQS_3split_df %>% arrange(Risk, date), 
+                             fit_drm_predictions_3split %>% dplyr::select(-Risk)) 
+
+
+Subway_BWQS_3split_df2 <- Subway_BWQS_3split_df1 %>%
+  filter(date>"2020-02-16") %>% #subsetting for visualization
+  mutate(Risk = factor(if_else(Risk == "High", "High (≥ 75%ile)", 
+                        if_else(Risk=="Mid", "Mid (IQR)", "Low (≤ 25%ile)")),
+                       levels = c("High (≥ 75%ile)", "Mid (IQR)", "Low (≤ 25%ile)")))
+#distinct(date, .keep_all = T)
+
+sfig5 <- ggplot() + 
+  geom_jitter(data = Subway_BWQS_3split_df2, aes(x = date, y = usage.median.ratio, color = as.factor(Risk)), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
+  geom_ribbon(data = subset(Subway_BWQS_3split_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_ribbon(data = subset(Subway_BWQS_3split_df2, Risk == "Mid (IQR)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_ribbon(data = subset(Subway_BWQS_3split_df2, Risk == "Low (≤ 25%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_line(data = Subway_BWQS_3split_df2, aes(x = date, y = Prediction, color = as.factor(Risk))) +
+  scale_x_date("Date", date_minor_breaks = "1 week") +
+  scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent) + 
+  geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
+  theme_bw(base_size = 16) +
+  labs(colour="BWQS Infection Risk Index") +
+  theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
+sfig5 
+
+
+#ZCTA level BWQS for subway 
+Subway_ridership_by_ZCTA <- relative.subway.usage(2020, by = "zcta")
+
+##There are clearly some higher outliers that need to be removed at the zcta level ##
+### Remove the zctas associated with the uhfs below
+
+# #create a dataframe for the analysis 
+# service_changes_in_lowsubway_areas <- tibble(date = as.Date(c("2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-15", "2020-02-16", "2020-02-22", "2020-02-23", "2020-02-29", "2020-03-01", "2020-03-07", "2020-03-08", 
+#                                                               "2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-16", "2020-02-16")),
+#                                              place = c("403","403","403","403","403","403","403","403","403","403","403","403", 
+#                                                        "502","502","502","502","502","502"))
+
+high_april_bronx_subway <- tibble(date = as.Date(c("2020-04-04", "2020-04-05", "2020-04-11", "2020-04-12", "2020-04-18", "2020-04-19", "2020-04-25", "2020-04-26")),
+                                  place = c("10469", "10469","10469","10469","10469","10469","10469","10469"))
+
+Subway_BWQS_ZCTA_df <- Subway_ridership_by_ZCTA %>%
+  left_join(., ZCTA_BWQS_score, by = c("place" = "zcta")) %>%
+  filter(!is.na(place) & date >= "2020-01-29" & date <= "2020-04-30") %>%
+  group_by(place) %>%
+  arrange(date) %>%
+  mutate(time_index = time(date)) %>%
+  ungroup() %>%
+  filter(!is.na(BWQS_index) & date != "2020-02-17") %>% #removing Presidents' Day national holiday 
+  anti_join(., high_april_bronx_subway, by = c("date", "place")) %>% #removing low outliers due to service changes in low subway density areas
+  mutate(Risk = factor(if_else(BWQS_index < quantile(BWQS_index, probs = .25), "Low",
+                              if_else(BWQS_index > quantile(BWQS_index, probs = .75), "High", "Mid")),
+                       levels = c("High", "Mid", "Low")))
+
+fit_drm_risk_3split_zcta_high <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_ZCTA_df, subset = Risk=="High")
+fit_drm_risk_3split_zcta_mid <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_ZCTA_df, subset = Risk=="Mid")
+fit_drm_risk_3split_zcta_low <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_ZCTA_df, subset = Risk=="Low")
+
+
+summary(fit_drm_risk_3split_zcta_high)
+summary(fit_drm_risk_3split_zcta_mid)
+summary(fit_drm_risk_3split_zcta_low)
+
+
+#b is not actually a slope - but a scaling factor that needs to be transformed into the slope
+slopes_zcta <- as_tibble(coef(fit_drm_risk_3split_zcta_high), rownames = "vars") %>%
+  bind_cols(BWQS_risk = "high") %>%
+  bind_rows(as_tibble(coef(fit_drm_risk_3split_zcta_mid), rownames = "vars") %>% bind_cols(BWQS_risk = "mid")) %>%
+  bind_rows(as_tibble(coef(fit_drm_risk_3split_zcta_low), rownames = "vars") %>% bind_cols(BWQS_risk = "low")) %>%
+  mutate(vars = str_remove(vars, fixed(":(Intercept)"))) %>%
+  spread(., vars, value) %>%
+  mutate(slope = -b*(-d/(4*e))) 
+
+as_tibble(confint(fit_drm_risk_3split_zcta_high), rownames = "vars") %>%
+  bind_cols(BWQS_risk = "high") %>%
+  bind_rows(as_tibble(confint(fit_drm_risk_3split_zcta_mid), rownames = "vars") %>% bind_cols(BWQS_risk = "mid")) %>%
+  bind_rows(as_tibble(confint(fit_drm_risk_3split_zcta_low), rownames = "vars") %>% bind_cols(BWQS_risk = "low")) %>%
+  mutate(vars = str_remove(vars, fixed(":(Intercept)"))) %>%
+  filter(vars == "b") %>%
+  right_join(., slopes_zcta, by = "BWQS_risk") %>%
+  mutate(slope_lower_ci = -`2.5 %`*(-d/(4*e)),
+         slope_higher_ci = -`97.5 %`*(-d/(4*e))) %>%
+  dplyr::select(BWQS_risk, slope, slope_lower_ci, slope_higher_ci)
+
+fit_drm_predictions_zcta <- as_tibble(withCallingHandlers(predict(fit_drm_risk_3split_zcta_high, interval = "confidence"), warning = handler) %>% 
+                                   bind_cols(., Risk = "High")) %>%
+  bind_rows(., as_tibble(withCallingHandlers(predict(fit_drm_risk_3split_zcta_mid, interval = "confidence"), 
+                                             warning = handler ) %>% bind_cols(., Risk = "Mid"))) %>%
+  bind_rows(., as_tibble(withCallingHandlers(predict(fit_drm_risk_3split_zcta_low, interval = "confidence"), 
+                                             warning = handler ) %>% bind_cols(., Risk = "Low"))) # %>% mutate(time_index = row_number()) 
+
+Subway_BWQS_ZCTA_df1 <- bind_cols(Subway_BWQS_ZCTA_df %>% arrange(Risk, date), 
+                             fit_drm_predictions_zcta %>% dplyr::select(-Risk)) 
+
+
+Subway_BWQS_ZCTA_df2 <- Subway_BWQS_ZCTA_df1 %>%
+  filter(date>"2020-02-16") %>% #subsetting for visualization
+  mutate(Risk = factor(if_else(Risk == "High", "High (≥ 75%ile)", 
+                        if_else(Risk=="Mid", "Mid (IQR)", "Low (≤ 25%ile)")), 
+                       levels = c("High (≥ 75%ile)", "Mid (IQR)", "Low (≤ 25%ile)")))
+#distinct(date, .keep_all = T)
+
+sfig6 <- ggplot() + 
+  geom_jitter(data = Subway_BWQS_ZCTA_df2, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
+  geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "Mid (IQR)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "Low (≤ 25%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
+  geom_line(data = Subway_BWQS_ZCTA_df2, aes(x = date, y = Prediction, color = Risk)) +
+  scale_x_date("Date", date_minor_breaks = "1 week") + 
+  scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent) + 
+  geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
+  theme_bw(base_size = 16) +
+  labs(colour="BWQS Infection Risk Index") +
+  theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
+
+sfig6
+
+## Trying negative binomial spatial mortality model with different adjacency matrix
+
+#Step 2a: Identify the neighbor relationships 
+spdat.sens <- as_Spatial(ZCTA_BWQS_COVID_shp1)
+ny.nb6 <- knearneigh(sp::coordinates(spdat.sens), k=6)
+ny.nb6 <- knn2nb(ny.nb6)
+ny.nb6 <- make.sym.nb(ny.nb6)
+ny.wt6 <- nb2listw(ny.nb6, style="W")
+
+#Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
+fit.nb.ny.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index, spdat.sens)
+lm.morantest(fit.nb.ny.sens, listw = ny.wt6)
+me.fit.sens <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index,
+                         spdat@data, family=negative.binomial(6.720348), listw = ny.wt6, verbose=T, alpha=.1, nsim = 999)
+
+#Step 2c: Pull out these fits and visualize the autocorrelation
+fits.sens <- data.frame(fitted(me.fit.sens))
+spdat.sens$me16 <- fits$vec16
+spdat.sens$me23 <- fits$vec23
+spdat.sens$me24 <- fits$vec24
+spplot(spdat.sens, "me16", at=quantile(spdat.sens$me16, p=seq(0,1,length.out = 7)))
+spplot(spdat.sens, "me23", at=quantile(spdat.sens$me23, p=seq(0,1,length.out = 7)))
+spplot(spdat.sens, "me24", at=quantile(spdat.sens$me24, p=seq(0,1,length.out = 7)))
+
+#Step 2d: Include the fits in our regression model as an additional parameter
+clean.nb.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index+fitted(me.fit.sens), spdat@data)
+tidy(clean.nb.sens) %>% mutate(estimate_exp = exp(estimate))
+as_tibble(confint(clean.nb.sens), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
+lm.morantest(clean.nb.sens, resfun = residuals, listw=ny.wt6)
+spdat.sens$nb_residuals <- clean.nb.sens$residuals
+spplot(spdat.sens, "nb_residuals", at=quantile(spdat.sens$nb_residuals, p=seq(0,1,length.out = 10)))
+ggplot() + geom_sf(data = st_as_sf(spdat.sens),aes(fill = cut_width(nb_residuals, width = 1))) + labs(fill = "Residuals\n(Standard Deviations)")
+
+##Outliers from BWQS
+outliers <- Compare_Metrics %>%
+  mutate(residual = pos_per_100000-BWQS_index,
+         std_residual = residual/sd(residual))
+  # dplyr::select(zcta, std_residual) 
+
+ outlier_shp <- ZCTA_ACS_COVID_shp %>% 
+   inner_join(., outliers, by = "zcta")
+
+ggplot() + geom_sf(data = outlier_shp, aes(fill = std_residual)) + scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7))
+ggplot() + geom_sf(data = outlier_shp, aes(fill = testing_ratio.y)) + scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7))
 
 #### Appendix
 Sys.time()
