@@ -241,22 +241,37 @@ tract_to_modzcta2 <- dplyr::select(tract_modzcta_pop2, -total_pop1)
 #### model 2 - select median tract value by ZCTA ####
 
 # get weighted median tract values of selected variables by MODZCTA
-SES_zcta_median <- tract_vars %>% 
-  st_set_geometry(., NULL) %>%
-  left_join(., tract_to_modzcta2, by = c("GEOID" = "TRACT")) %>% 
-  filter(!is.na(MODZCTA)) %>% 
-  group_by(MODZCTA) %>%
-  summarise(essentialworker_drove_median = Hmisc::wtd.quantile(essentialworker_drove, SUM_RES_RATIO)[[3]],
-            essentialworker_pubtrans_median = Hmisc::wtd.quantile(essentialworker_pubtrans, SUM_RES_RATIO)[[3]],
-            not_quarantined_jobs_median = Hmisc::wtd.quantile(not_quarantined_jobs, SUM_RES_RATIO)[[3]],
-            didnot_workhome_commute_median = Hmisc::wtd.quantile(didnot_workhome_commute, SUM_RES_RATIO)[[3]],
-            not_insured_median = Hmisc::wtd.quantile(not_insured, SUM_RES_RATIO)[[3]],
-            one_over_medincome_median = Hmisc::wtd.quantile(one_over_medincome, SUM_RES_RATIO)[[3]],
-            unemployed_median = Hmisc::wtd.quantile(unemployed, SUM_RES_RATIO)[[3]],
-            avg_hhold_size_median = Hmisc::wtd.quantile(avg_hhold_size, SUM_RES_RATIO)[[3]],
-            res_vol_popdensity_median = Hmisc::wtd.quantile(res_vol_popdensity, SUM_RES_RATIO)[[3]],
-            one_over_grocers_per_1000_median = Hmisc::wtd.quantile(one_over_grocers_per_1000, SUM_RES_RATIO)[[3]]) 
-SES_zcta_median  
+
+get_tract_vars_by_zcta <- function(tract_vars, modzcta_tract_crosswalk, whichq){
+  whichq = str_to_lower(whichq)
+  if(whichq %in% c("median", "q2", "2q", "2")){
+    qname = "median"
+    qnum = 2
+  } else if(whichq %in% c("q3", "3q", "3")){
+    qname = "3Q"
+    qnum = 3
+  } else { stop("unhandled quartile selected: ", whichq)}
+  
+  ses_zcta <- tract_vars %>% 
+    st_set_geometry(., NULL) %>%
+    left_join(., modzcta_tract_crosswalk, by = c("GEOID" = "TRACT")) %>% 
+    filter(!is.na(MODZCTA)) %>% 
+    group_by(MODZCTA) %>%
+    summarise(essentialworker_drove_rename = Hmisc::wtd.quantile(essentialworker_drove, SUM_RES_RATIO)[[qnum]],
+              essentialworker_pubtrans_rename = Hmisc::wtd.quantile(essentialworker_pubtrans, SUM_RES_RATIO)[[qnum]],
+              not_quarantined_jobs_rename = Hmisc::wtd.quantile(not_quarantined_jobs, SUM_RES_RATIO)[[qnum]],
+              didnot_workhome_commute_rename = Hmisc::wtd.quantile(didnot_workhome_commute, SUM_RES_RATIO)[[qnum]],
+              not_insured_rename = Hmisc::wtd.quantile(not_insured, SUM_RES_RATIO)[[qnum]],
+              one_over_medincome_rename = Hmisc::wtd.quantile(one_over_medincome, SUM_RES_RATIO)[[qnum]],
+              unemployed_rename = Hmisc::wtd.quantile(unemployed, SUM_RES_RATIO)[[qnum]],
+              avg_hhold_size_rename = Hmisc::wtd.quantile(avg_hhold_size, SUM_RES_RATIO)[[qnum]],
+              res_vol_popdensity_rename = Hmisc::wtd.quantile(res_vol_popdensity, SUM_RES_RATIO)[[qnum]],
+              one_over_grocers_per_1000_rename = Hmisc::wtd.quantile(one_over_grocers_per_1000, SUM_RES_RATIO)[[qnum]]) 
+  
+  ses_zcta %>% rename_with(~ gsub("rename", qname, .x))
+}
+
+SES_zcta_median <- get_tract_vars_by_zcta(tract_vars, tract_to_modzcta2, "median")
 
 # join SES to testing data: positive/100k and testing_ratio
 SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
@@ -264,81 +279,110 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
   left_join(SES_zcta_median, by = c("zcta" = "MODZCTA"))
 
 #Step 2a: Examine relationships between explanatory variables to make sure nothing >0.9 correlation, as this could bias BWQS
-Cors_SESVars_median <- cor(SES_zcta_median %>% dplyr::select(-MODZCTA), method = "kendall") %>% as.data.frame()
-Cors_SESVars_median$var1 <- row.names(Cors_SESVars_median)
-Cors_SESVars_median2 <- gather(data = Cors_SESVars_median, key = "var2", value = "correlation", -var1) %>%
-  filter(var1 != var2)
-Cors_SESVars_median2 %>% filter(is.na(correlation)) %>% nrow() # 0
-max(Cors_SESVars_median2$correlation, na.rm = T) # 0.6
+check_all_cor <- function(ses_zcta){
+  Cors_SESVars <- cor(ses_zcta %>% dplyr::select(-MODZCTA), method = "kendall") %>% as.data.frame()
+  Cors_SESVars$var1 <- row.names(Cors_SESVars)
+  Cors_SESVars2 <- gather(data = Cors_SESVars, key = "var2", value = "correlation", -var1) %>%
+    filter(var1 != var2)
+  nacount = Cors_SESVars2 %>% filter(is.na(correlation)) %>% nrow() 
+  if(nacount > 0) stop("There are NA values in correlations; check for missing values.")
+  paste("The maximum absolute correlation between any two variables is", 
+        round(max(abs(Cors_SESVars2$correlation)),2))
+}
+check_all_cor(SES_zcta_median)
+
 
 ## Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
 SES_vars_median = names(SES_zcta_median)[names(SES_zcta_median) != "MODZCTA"]
-bind_cols(Variables = SES_vars_median,
-          
-          SES_zcta_median_testing %>%
-            summarise_at(vars(all_of(SES_vars_median)), list(~cor(., pos_per_100000, method = "kendall"))) %>%
-            t() %>%
-            as_tibble(),
-          
-          SES_zcta_median_testing %>%
-            summarise_at(vars(all_of(SES_vars_median)),
-                         list(~cor.test(., pos_per_100000, method = "kendall")$p.value)) %>%
-            t() %>%
-            as_tibble()) %>%
-  
-  mutate(`Correlation (Tau)` = round(V1...2, 3),
-         `p value` = as.character(ifelse(V1...3 < 0.0001, "< 0.0001", round(V1...3, 3))),) %>%
-  dplyr::select(-V1...2, -V1...3) 
 
+get_kendall <- function(ses_testng_zcta, ses_varnames){
+  bind_cols(Variables = SES_vars_median,
+            
+            ses_testng_zcta %>%
+              summarise_at(vars(all_of(ses_varnames)), list(~cor(., pos_per_100000, method = "kendall"))) %>%
+              t() %>%
+              as_tibble(),
+            
+            ses_testng_zcta %>%
+              summarise_at(vars(all_of(ses_varnames)),
+                           list(~cor.test(., pos_per_100000, method = "kendall")$p.value)) %>%
+              t() %>%
+              as_tibble()) %>%
+    
+    mutate(`Correlation (Tau)` = round(V1...2, 3),
+           `p value` = as.character(ifelse(V1...3 < 0.0001, "< 0.0001", round(V1...3, 3))),) %>%
+    dplyr::select(-V1...2, -V1...3) 
+}
+get_kendall(SES_zcta_median_testing, SES_vars_median)
 
 #Step 3: Prepare data for BWQS and pass to stan for model fitting 
-y <- SES_zcta_median_testing$pos_per_100000
-X <- SES_zcta_median_testing %>% dplyr::select(all_of(SES_vars_median))
-K <- SES_zcta_median_testing$testing_ratio
-for (vname in SES_vars_median){
-  X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10}
-data_median <- as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
-
-data_median_list = list(N  = NROW(data_median), 
-                 C  = NCOL(X), 
-                 K  = NCOL(K), 
-                 XC = cbind(as.matrix(X)), 
-                 XK = cbind(K), 
-                 Dalp = rep(1,length(SES_vars_median)), 
-                 y = as.vector(data_median$y))
-
-#pm( # do not use pairmemo while debugging
-  stan.model_median <- function(){
-    stan(file = BWQS_stan_model,
-         data = data_median_list, chains = 1,
-         warmup = 2500, iter = 20000, cores = 16,
+pm(
+run_stan <- function(ses_testing_zcta, ses_varnames){
+  y <- ses_testing_zcta$pos_per_100000
+  X <- ses_testing_zcta %>% dplyr::select(all_of(ses_varnames))
+  K <- ses_testing_zcta$testing_ratio
+  for (vname in ses_varnames){
+    X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10}
+  model_data <- as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
+  
+  model_data_list = list(N  = NROW(model_data), 
+                   C  = NCOL(X), 
+                   K  = NCOL(K), 
+                   XC = cbind(as.matrix(X)), 
+                   XK = cbind(K), 
+                   Dalp = rep(1,length(ses_varnames)), 
+                   y = as.vector(model_data$y))
+  
+  model_output <- stan(file = BWQS_stan_model,
+         data = model_data_list, chains = 1,
+         warmup = 2500, iter = 20000, cores = 1,
          thin = 10, refresh = 0, algorithm = "NUTS",
          seed = 1234, control = list(max_treedepth = 20,
                                      adapt_delta = 0.999999999999999))
-    }#)
-system.time(m2_median <- stan.model_median()) # 209 seconds, ran single core
-extract_waic(m2_median)
+  
 
-m2vars = c("phi", "beta0", "beta1", "delta1", SES_vars_median)
-parameters_to_drop <- c("phi", "delta1", "beta0", "beta1")
-number_of_coefficients <- length(SES_vars_median) + 4
+  list(model_output = model_output, quantiled_vars = X)
+})
+m2_median <- run_stan(SES_zcta_median_testing, SES_vars_median)
+extract_waic(m2_median$model_output)
 
-BWQS_params_m2 <- bind_cols(as_tibble(summary(m2_median)$summary[1:number_of_coefficients,c(1,4,8)]), 
-                            label = m2vars)
+check_quantiled_cor <- function(quantiled_vars){
+  Cors_SESVars_quantiled <- cor(X, method = "kendall")  
+  Cors_SESVars_quantiled1 <- as.data.frame(Cors_SESVars_quantiled)
+  Cors_SESVars_quantiled1$var1 <- row.names(Cors_SESVars_quantiled1)
+  Cors_SESVars_quantiled2 <- gather(data = Cors_SESVars_quantiled1, key = "var2", value = "correlation", -var1) %>%
+    filter(var1 != var2)
+}
+cor_quantiled_median = check_quantiled_cor(m2_median$quantiled_vars)
+round(max(abs(cor_quantiled_median$correlation)),2)
 
-BWQS_fits_m2 <- BWQS_params_m2 %>%
-  rename(lower = "2.5%", upper = "97.5%") %>%
-  filter(!label %in% parameters_to_drop) %>%
-  arrange(desc(mean)) %>%
-  mutate(group = factor(if_else(str_detect(label,"one_over_medincome")|str_detect(label,"not_insured")|str_detect(label,"unemployed"), "Finances &\nAccess to care",
-                                if_else(str_detect(label,"one_over_grocers_per_1000"), "Food\nAccess",
-                                        if_else(str_detect(label, "essential")|str_detect(label,"not_quarantined_jobs")|str_detect(label,"didnot_workhome_commute"), "Commuting and\nEssential Work",
-                                                if_else(str_detect(label,"avg_hhold_size")|str_detect(label,"res_vol_popdensity"), "Population\nDensity", "Unmatched")))),
-                        levels = c("Commuting and\nEssential Work", "Finances &\nAccess to care", "Population\nDensity", "Food\nAccess")))
+get_BWQS_fits <- function(model_results, ses_varnames){
+  mvars = c("phi", "beta0", "beta1", "delta1", ses_varnames)
+  parameters_to_drop <- c("phi", "delta1", "beta0", "beta1")
+  number_of_coefficients <- length(ses_varnames) + 4
+  
+  BWQS_params <- bind_cols(as_tibble(summary(model_results)$summary[1:number_of_coefficients,c(1,4,8)]), 
+                              label = mvars)
+  
+  BWQS_fits <- BWQS_params %>%
+    rename(lower = "2.5%", upper = "97.5%") %>%
+    filter(!label %in% parameters_to_drop) %>%
+    arrange(desc(mean)) %>%
+    mutate(group = factor(if_else(str_detect(label,"one_over_medincome")|str_detect(label,"not_insured")|str_detect(label,"unemployed"), "Finances &\nAccess to care",
+                                  if_else(str_detect(label,"one_over_grocers_per_1000"), "Food\nAccess",
+                                          if_else(str_detect(label, "essential")|str_detect(label,"not_quarantined_jobs")|str_detect(label,"didnot_workhome_commute"), "Commuting and\nEssential Work",
+                                                  if_else(str_detect(label,"avg_hhold_size")|str_detect(label,"res_vol_popdensity"), "Population\nDensity", "Unmatched")))),
+                          levels = c("Commuting and\nEssential Work", "Finances &\nAccess to care", "Population\nDensity", "Food\nAccess")))
+  
+  list(fits = BWQS_fits, params = BWQS_params)
+}
+fits_median = get_BWQS_fits(m2_median$model_output, SES_vars_median)
+fits_median_params = fits_median$params
+fits_median = fits_median$fits
 
 # labels1 already in memory
 
-m2_fig2 <- ggplot(data=BWQS_fits_m2, aes(x= reorder(label, mean), y=mean, ymin=lower, ymax=upper)) +
+m2_fig2 <- ggplot(data= fits_median, aes(x= reorder(label, mean), y=mean, ymin=lower, ymax=upper)) +
   geom_pointrange() + 
   coord_flip() + 
   xlab("") + 
@@ -349,61 +393,54 @@ m2_fig2 <- ggplot(data=BWQS_fits_m2, aes(x= reorder(label, mean), y=mean, ymin=l
   theme(strip.text.x = element_text(size = 14))
 m2_fig2
 
-m2_Cors_SESVars_quantiled <- cor(X, method = "kendall")  
-m2_Cors_SESVars_quantiled1 <- as.data.frame(m2_Cors_SESVars_quantiled)
-m2_Cors_SESVars_quantiled1$var1 <- row.names(m2_Cors_SESVars_quantiled1)
-m2_Cors_SESVars_quantiled2 <- gather(data = m2_Cors_SESVars_quantiled1, key = "var2", value = "correlation", -var1) %>%
-  filter(var1 != var2)
-m2_Cors_SESVars_quantiled2
-
 #Step 4: Use the variable-specific weight on the decile quantile splits to create a 10 point ZCTA-level infection risk score  
 
-BWQS_weights_m2 <- as.numeric(summary(m2_median)$summary[5:number_of_coefficients,c(1)])
+BWQS_weights_median <- as.numeric(summary(m2_median$model_output)$summary[5:number_of_coefficients,c(1)])
 
-ZCTA_ACS_COVID2_m2 <- X*BWQS_weights_m2[col(SES_zcta_median_testing)] 
+ZCTA_ACS_COVID2_median <- m2_median$quantiled_vars*BWQS_weights_median[col(SES_zcta_median_testing)] 
 
-BWQS_DF_m2 <- ZCTA_ACS_COVID2_m2 %>% 
+BWQS_DF_median <- ZCTA_ACS_COVID2_median %>% 
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
   dplyr::select(BWQS_index) 
 
-BWQS_predicted_infection_median_testing_m2 = 
-  exp(BWQS_params_m2[BWQS_params_m2$label == "beta0", ]$mean + 
-      (BWQS_params_m2[BWQS_params_m2$label == "beta1", ]$mean * BWQS_DF_m2) + 
-      (BWQS_params_m2[BWQS_params_m2$label == "delta1", ]$mean * median(K)))
-colnames(BWQS_predicted_infection_median_testing_m2) <- "predicted"
-BWQS_predicted_infection_median_testing_m2
+BWQS_predicted_infection_median = 
+  exp(fits_median_params[fits_median_params$label == "beta0", ]$mean + 
+      (fits_median_params[fits_median_params$label == "beta1", ]$mean * BWQS_DF_median) + 
+      (fits_median_params[fits_median_params$label == "delta1", ]$mean * median(K)))
+colnames(BWQS_predicted_infection_median) <- "predicted"
+BWQS_predicted_infection_median
 
 # Visualize the relationship between BWQS index and infection rate
-m2_scatter_data = data.frame(BWQS_DF_m2, y, BWQS_predicted_infection_median_testing_m2)
-BWQS_scatter_m2 <- ggplot(data = m2_scatter_data, aes(BWQS_index, y)) + 
+m2_scatter_data = data.frame(BWQS_DF_median, y, BWQS_predicted_infection_median)
+BWQS_scatter_median <- ggplot(data = m2_scatter_data, aes(BWQS_index, y)) + 
   geom_point() + 
   geom_line(aes(y = predicted)) + 
   scale_x_continuous("BWQS infection risk index") + 
   scale_y_continuous("Infections per 100,000", label=comma)
-BWQS_scatter_m2 <- ggExtra::ggMarginal(BWQS_scatter_m2, type = "histogram", 
+BWQS_scatter_median <- ggExtra::ggMarginal(BWQS_scatter_median, type = "histogram", 
                                        xparams = list(binwidth = 1), yparams = list(binwidth = 200))
-BWQS_scatter_m2
+BWQS_scatter_median
 if(export.figs) {
-  png(filename = here("figures", paste0("fig1_m2_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
-  print(BWQS_scatter_m2)
+  png(filename = here("figures", paste0("fig1_median_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
+  print(BWQS_scatter_median)
   dev.off()
 }
 
 # SF object with median variables and BWQS index from model 2
 all(ZCTA_ACS_COVID_shp$zcta == SES_zcta_median$MODZCTA) # confirming matching zcta order before bind_cols
-ZCTA_BWQS_COVID_shp_m2 <- ZCTA_ACS_COVID_shp %>% dplyr::select(zcta, geometry) %>% 
+ZCTA_BWQS_COVID_shp_median <- ZCTA_ACS_COVID_shp %>% dplyr::select(zcta, geometry) %>% 
   left_join(SES_zcta_median, by = c("zcta" = "MODZCTA")) %>% 
-  bind_cols(BWQS_DF_m2)
+  bind_cols(BWQS_DF_median)
 
 #Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
 
 # reproject to WGS84 to be compatible with scalebar
-ZCTA_BWQS_COVID_shp_m2 <- st_transform(ZCTA_BWQS_COVID_shp_m2, 4326)
+ZCTA_BWQS_COVID_shp_median <- st_transform(ZCTA_BWQS_COVID_shp_median, 4326)
 
 # BWQS infection risk map by ZCTA, median tract model (version of Figure 3)
-fig3_m2 <- ggplot(ZCTA_BWQS_COVID_shp_m2) + 
+fig3_median <- ggplot(ZCTA_BWQS_COVID_shp_median) + 
   geom_sf(aes(fill = BWQS_index), lwd = 0.2) + 
-  scalebar(ZCTA_BWQS_COVID_shp_m2, dist = 5, dist_unit = "km", 
+  scalebar(ZCTA_BWQS_COVID_shp_median, dist = 5, dist_unit = "km", 
            transform = TRUE, model = "WGS84", 
            st.size = 2.3, height = 0.015, border.size = 0.5,
            anchor = c(x = -73.71, y = 40.51)) + 
@@ -418,17 +455,17 @@ fig3_m2 <- ggplot(ZCTA_BWQS_COVID_shp_m2) +
         legend.key.size = unit(1.1, "lines"),
         axis.title.y = element_blank(),
         axis.title.x = element_blank())
-fig3_m2
-if(export.figs) ggsave(plot = fig3_m2, filename = here("figures", paste0("fig3","_m2_",Sys.Date(),".png")), 
+fig3_median
+if(export.figs) ggsave(plot = fig3_median, filename = here("figures", paste0("fig3","_m2_",Sys.Date(),".png")), 
                        dpi = 600, device = "png", width = 4, height = 3.7)
 
 # Difference map between original ZCTA-wide model and model 2 using tract medians
 
-ZCTA_BWQS_COVID_shp_m2$m2_m1_diff <- ZCTA_BWQS_COVID_shp_m2$BWQS_index - ZCTA_BWQS_COVID_shp$BWQS_index
+ZCTA_BWQS_COVID_shp_median$m2_m1_diff <- ZCTA_BWQS_COVID_shp_median$BWQS_index - ZCTA_BWQS_COVID_shp$BWQS_index
 library(colorspace)
-fig_m2m1_diff <- ggplot(ZCTA_BWQS_COVID_shp_m2) + 
+fig_m2m1_diff <- ggplot(ZCTA_BWQS_COVID_shp_median) + 
   geom_sf(aes(fill = m2_m1_diff), lwd = 0.2) + 
-  scalebar(ZCTA_BWQS_COVID_shp_m2, dist = 5, dist_unit = "km", 
+  scalebar(ZCTA_BWQS_COVID_shp_median, dist = 5, dist_unit = "km", 
            transform = TRUE, model = "WGS84", 
            st.size = 2.3, height = 0.015, border.size = 0.5,
            anchor = c(x = -73.71, y = 40.51)) + 
