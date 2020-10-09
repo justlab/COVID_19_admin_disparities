@@ -28,6 +28,10 @@ library(Just.universal)
 
 #### SESSION CONFIGURATIONS ####
 
+# Get some data from the git repository rather than downloading from original
+#   source, to avoid changes in model results due to updated data
+use_repo_data = TRUE
+
 here() # current working directory
 if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){ # set up default download location for MTA turnstile data
   mta_dir = here("data/mta_turnstile")
@@ -195,10 +199,14 @@ MODZCTA_NYC_shp <- download(
 )
 
 #Food outlets 
-food_retail <- download(
-    "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
-    "retail_food_stores.csv",
-    read_csv)
+if(use_repo_data){
+  food_retail <- read_csv("data/retail_food_stores_2019-06-13.csv")
+} else {
+  food_retail <- download(
+      "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
+      "retail_food_stores.csv",
+      read_csv)
+}
 
 # Download deaths by ZCTA as of May 23rd
 deaths_by23May2020_by_zcta <- download(
