@@ -28,6 +28,10 @@ library(Just.universal)
 
 #### SESSION CONFIGURATIONS ####
 
+# Get some data from the git repository rather than downloading from original
+#   source, to avoid changes in model results due to updated data
+use_repo_data = TRUE
+
 here() # current working directory
 if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){ # set up default download location for MTA turnstile data
   mta_dir = here("data/mta_turnstile")
@@ -195,10 +199,14 @@ MODZCTA_NYC_shp <- download(
 )
 
 #Food outlets 
-food_retail <- download(
-    "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
-    "retail_food_stores.csv",
-    read_csv)
+if(use_repo_data){
+  food_retail <- read_csv("data/retail_food_stores_2019-06-13.csv")
+} else {
+  food_retail <- download(
+      "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
+      "retail_food_stores.csv",
+      read_csv)
+}
 
 # Download deaths by ZCTA as of May 23rd
 deaths_by23May2020_by_zcta <- download(
@@ -224,7 +232,8 @@ NYC_counties1 <- c("Bronx","Kings","Queens","New York","Richmond")
 NYC_counties1_full <- c("Bronx County","Kings County","Queens County","New York County","Richmond County")
 NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","Richmond"), 
                                 boro = c("Bronx","Brooklyn","Queens","Manhattan","Staten Island"), 
-                                full_county = c("Bronx County","Kings County","Queens County","New York County","Richmond County"))
+                                full_county = c("Bronx County","Kings County","Queens County","New York County","Richmond County"),
+                                fips = c("36005", "36047", "36081", "36061", "36085"))
 
 #upload the stan code alongside the disparities code 
 BWQS_stan_model <- here("code", "nb_bwqs_cov.stan") 
@@ -447,7 +456,7 @@ ZCTA_ACS_COVID_shp <- MODZCTA_NYC_shp1 %>%
          grocers_per_1000 = (grocers/total_pop1)*1000,
          pos_per_100000 = round(pos_per_100000, 0),
          valid_var = "0",
-         didnot_workhome_commute = 1/workhome_commute,
+         didnot_workhome_commute = 100 - workhome_commute,
          one_over_grocers_per_1000 = if_else(is.infinite(1/grocers_per_1000), 0, 1/grocers_per_1000),
          one_over_medincome = 1/medincome) %>%
   dplyr::select(-pubtrans_subway_commute, -pubtrans_ferry_commute) %>%
