@@ -244,13 +244,12 @@ NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","
 BWQS_stan_model <- here("code", "nb_bwqs_cov.stan") 
 
 
-
 ####Census Data Collection and Cleaning####
 #function to pull ACS data 
-pm(fst = T,
-   acs.f <- function(admin_unit, state_unit) {
+pm(acs.f <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY"), sf_shapes = c(TRUE, FALSE)) {
      ACS_Data <- get_acs(geography = admin_unit,
                          state = state_unit,
+                         geometry = sf_shapes,
                          variables = c(medincome = "B19013_001",
                                        total_pop1 = "B01003_001",
                                        fpl_100 = "B06012_002", 
@@ -316,107 +315,56 @@ pm(fst = T,
      return(ACS_Data)
    })
 
-#ZCTA CENSUS DATA
-ACS_Data1 <- as.data.frame(acs.f("zcta", NULL)) #download the zcta data
-
 modzcta_to_zcta1 <- modzcta_to_zcta %>% mutate(ZCTA = as.character(ZCTA))
 
-#clean zcta data
-ACS_Data1a <- ACS_Data1 %>%
-  left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
-  group_by(MODZCTA) %>%
-  summarise_at(vars(medincome, median_rent), ~mean(., na.rm = T)) %>% 
-  rename(zcta = "MODZCTA")
+#function to clean ACS data
+pm(clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
+  if(admin_unit=="zcta"){
+    ACS_Data1a <- df %>%
+      left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
+      group_by(MODZCTA) %>%
+      summarise_at(vars(medincome, median_rent), ~weighted.mean(., total_pop1, na.rm = T)) %>% 
+      rename(zcta = "MODZCTA")
+    
+    ACS_Data1b <- df %>%
+      left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
+      group_by(MODZCTA) %>%
+      summarise_at(vars(total_pop1:fpl_100to150, total_hholds1:age65_plus), ~sum(.)) %>%
+      mutate_at(vars(ends_with("_commute")), ~round((./total_commute1)*100, 2)) %>% #proportion of people relying on a given mode of transit
+      mutate_at(vars(ends_with("_raceethnic")), ~round((./total_pop1)*100, 2)) %>% #proportion of ppl reporting a given race/ethncity 
+      mutate(not_insured = round(((under19_noinsurance + age19_34_noinsurance + age35_64_noinsurance + age65plus_noinsurance) / total_pop1)*100, 2), #proportion uninsured
+             #snap_hholds = round((hholds_snap/total_hholds1)*100, 2), #proportion relying on SNAP
+             #fpl_150 = round(((fpl_100+fpl_100to150)/total_pop1)*100, 2), #proportion 150% or less of FPL
+             unemployed = round((unemployed/over16total_industry1)*100, 2), #proportion unemployed
+             not_quarantined_jobs = round(((ag_industry+(construct_industry*.25)+wholesaletrade_industry+ #an estimate of who is still leaving the house for work based on industry
+                                              (edu_health_socasst_industry*.5)+transpo_and_utilities_industry)/over16total_industry1)*100, 2)) %>%
+      dplyr::select(-ends_with("_noinsurance"), -fpl_100, -fpl_100to150, -ends_with("_industry"), -hholds_snap) %>%
+      rename(zcta = "MODZCTA") 
+    
+    ACS_Data2 <- left_join(ACS_Data1a, ACS_Data1b, by = "zcta") %>%
+      mutate(zcta = as.character(zcta))
+    
+  } else{
+    
+    ACS_Data2 <- df %>%
+      mutate_at(vars(ends_with("_commute")), ~round((./total_commute1)*100, 2)) %>% #proportion of people relying on a givenmode of transit
+      mutate_at(vars(ends_with("_raceethnic")), ~round((./total_pop1)*100, 2)) %>% #proportion of ppl reporting a given race/ethncity 
+      mutate(not_insured = round(((under19_noinsurance + age19_34_noinsurance + age35_64_noinsurance + age65plus_noinsurance) / total_pop1)*100, 2), #proportion uninsured
+             unemployed = round((unemployed/over16total_industry1)*100, 2), #proportion unemployed
+             not_quarantined_jobs = round(((ag_industry+(construct_industry*.25)+wholesaletrade_industry+ #an estimate of who is still leaving the house for work based on industry
+                                              (edu_health_socasst_industry*.5)+transpo_and_utilities_industry)/over16total_industry1)*100, 2)) %>%
+      dplyr::select(-ends_with("_noinsurance"), -ends_with("_industry"),-fpl_100, -fpl_100to150,-hholds_snap) 
+  }
+  
+  return(ACS_Data2)
+})
 
-ACS_Data1b <- ACS_Data1 %>%
-  left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
-  group_by(MODZCTA) %>%
-  summarise_at(vars(total_pop1:fpl_100to150, total_hholds1:age65_plus), ~sum(.)) %>%
-  mutate_at(vars(ends_with("_commute")), ~round((./total_commute1)*100, 2)) %>% #proportion of people relying on a given mode of transit
-  mutate_at(vars(ends_with("_raceethnic")), ~round((./total_pop1)*100, 2)) %>% #proportion of ppl reporting a given race/ethncity 
-  mutate(not_insured = round(((under19_noinsurance + age19_34_noinsurance + age35_64_noinsurance + age65plus_noinsurance) / total_pop1)*100, 2), #proportion uninsured
-         snap_hholds = round((hholds_snap/total_hholds1)*100, 2), #proportion relying on SNAP
-         fpl_150 = round(((fpl_100+fpl_100to150)/total_pop1)*100, 2), #proportion 150% or less of FPL
-         unemployed = round((unemployed/over16total_industry1)*100, 2), #proportion unemployed
-         not_quarantined_jobs = round(((ag_industry+(construct_industry*.25)+wholesaletrade_industry+ #an estimate of who is still leaving the house for work based on industry
-                                          (edu_health_socasst_industry*.5)+transpo_and_utilities_industry)/over16total_industry1)*100, 2)) %>%
-  dplyr::select(-ends_with("_noinsurance"), -fpl_100, -fpl_100to150, -ends_with("_industry"), -hholds_snap) %>%
-  rename(zcta = "MODZCTA")
-
-ACS_Data2 <- left_join(ACS_Data1a, ACS_Data1b, by = "zcta")
-
-# ACS_Data2 <- ACS_Data1 %>%
-#   left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
-#   group_by(MODZCTA) %>%
-#   summarise_at(vars(medincome:age65_plus), ~sum(.)) #NEED TO FIX
-#   mutate_at(vars(ends_with("_commute")), ~round((./total_commute1)*100, 2)) %>% #proportion of people relying on a given mode of transit
-#   mutate_at(vars(ends_with("_raceethnic")), ~round((./total_pop1)*100, 2)) %>% #proportion of ppl reporting a given race/ethncity 
-#   mutate(not_insured = round(((under19_noinsurance + age19_34_noinsurance + age35_64_noinsurance + age65plus_noinsurance) / total_pop1)*100, 2), #proportion uninsured
-#          snap_hholds = round((hholds_snap/total_hholds1)*100, 2), #proportion relying on SNAP
-#          fpl_150 = round(((fpl_100+fpl_100to150)/total_pop1)*100, 2), #proportion 150% or less of FPL
-#          unemployed = round((unemployed/over16total_industry1)*100, 2), #proportion unemployed
-#          not_quarantined_jobs = round(((ag_industry+(construct_industry*.25)+wholesaletrade_industry+ #an estimate of who is still leaving the house for work based on industry
-#                                         (edu_health_socasst_industry*.5)+transpo_and_utilities_industry)/over16total_industry1)*100, 2)) %>%
-#   dplyr::select(-ends_with("_noinsurance"), -fpl_100, -fpl_100to150, -ends_with("_industry"), -hholds_snap) %>%
-#   rename(zcta = "GEOID")
-
-
-#### Estimating the mode of transportation for essential workers ####
+### Function to pull mode of transportation for our approximate of essential workers ###
 
 pm(fst = T,
-acs.f2 <- function() {
-    ACS_EssentialWrkr_Commute <- get_acs(geography = "zcta", #pull down the relevant categories 
-                                         variables = c(ag_car1_commute = "B08126_017",
-                                                       ag_pubtrans_commute = "B08126_047",
-                                                       construct_car1_commute ="B08126_018",
-                                                       construct_pubtrans_commute = "B08126_048",
-                                                       wholesale_car1_commute = "B08126_020",
-                                                       wholesale_pubtrans_commute = "B08126_050",
-                                                       transpo_car1_commute = "B08126_022",
-                                                       transpo_pubtrans_commute = "B08126_052",
-                                                       ed_hlthcare_car1_commute = "B08126_026",
-                                                       ed_hlthcare_pubtrans_commute = "B08126_056"),
-                                         year = 2018, 
-                                         output = "wide",
-                                         survey = "acs5")
-
-
-    ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
-      dplyr::select(-ends_with("M"), -NAME) %>%
-      filter(GEOID %in% ZCTAs_in_NYC) %>%
-      mutate_at(vars(starts_with("ed_hlthcare")), ~round(./2), 0) %>% #maintain same proportions as estimated nonquarintined jobs
-      mutate_at(vars(starts_with("construct")), ~round(./4), 0) %>%
-      mutate(essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))), 
-             essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
-      rename(zcta = GEOID) %>%
-      dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans)
-})
-ACS_EssentialWrkr_Commute1 = as.data.frame(acs.f2())
-
-#TRACT CENSUS DATA  
-options(tigris_use_cache = TRUE)
-acs_tracts <- as.data.frame(acs.f("tract"))
-
-# download NY tract data
-acs_tracts = get_pop_tracts()
-dim(acs_tracts) # 2167, 39
-
-# derived variables
-acs_tracts2 <- acs_tracts %>%
-  mutate_at(vars(ends_with("_commute")), ~round((./total_commute1)*100, 2)) %>% #proportion of people relying on a givenmode of transit
-  mutate_at(vars(ends_with("_raceethnic")), ~round((./total_pop1)*100, 2)) %>% #proportion of ppl reporting a given race/ethncity 
-  mutate(not_insured = round(((under19_noinsurance + age19_34_noinsurance + age35_64_noinsurance + age65plus_noinsurance) / total_pop1)*100, 2), #proportion uninsured
-         unemployed = round((unemployed/over16total_industry1)*100, 2), #proportion unemployed
-         not_quarantined_jobs = round(((ag_industry+(construct_industry*.25)+wholesaletrade_industry+ #an estimate of who is still leaving the house for work based on industry
-                                          (edu_health_socasst_industry*.5)+transpo_and_utilities_industry)/over16total_industry1)*100, 2)) %>%
-  dplyr::select(-ends_with("_noinsurance"), -ends_with("_industry"))
-dim(acs_tracts2) # 2167, 24
-
-# commute times for essential workers
-pm(fst = T,     
-   get_acs_tracts_commute <- function() {
-     ACS_EssentialWrkr_Commute <- get_acs(geography = "tract", 
-                                          state = "36", 
+   acs.f2 <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")) {
+     ACS_EssentialWrkr_Commute <- get_acs(geography = admin_unit, #pull down the relevant categories 
+                                          state = state_unit,
                                           variables = c(ag_car1_commute = "B08126_017",
                                                         ag_pubtrans_commute = "B08126_047",
                                                         construct_car1_commute ="B08126_018",
@@ -429,21 +377,50 @@ pm(fst = T,
                                                         ed_hlthcare_pubtrans_commute = "B08126_056"),
                                           year = 2018, 
                                           output = "wide",
-                                          survey = "acs5",
-                                          cache_table = TRUE)
+                                          survey = "acs5")
      
-     ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
+     if(is.null(state_unit)){
+     
+     ACS_Essential_worker_estimates <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
        dplyr::select(-ends_with("M"), -NAME) %>%
-       filter(substr(GEOID,1,5) %in% NYC_boro_county_match$fips) %>% # Tracts in NYC counties
+       filter(GEOID %in% ZCTAs_in_NYC) %>%
        mutate_at(vars(starts_with("ed_hlthcare")), ~round(./2), 0) %>% #maintain same proportions as estimated nonquarintined jobs
        mutate_at(vars(starts_with("construct")), ~round(./4), 0) %>%
        mutate(essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))), 
               essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
-       dplyr::select(GEOID, essentialworker_drove, essentialworker_pubtrans)
+       rename(zcta = GEOID) %>%
+       dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans)
+     }
+     
+     else{
+       
+     ACS_Essential_worker_estimates <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
+         dplyr::select(-ends_with("M"), -NAME) %>%
+         filter(substr(GEOID,1,5) %in% NYC_boro_county_match$fips) %>% # Tracts in NYC counties
+         mutate_at(vars(starts_with("ed_hlthcare")), ~round(./2), 0) %>% #maintain same proportions as estimated nonquarintined jobs
+         mutate_at(vars(starts_with("construct")), ~round(./4), 0) %>%
+         mutate(essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))), 
+                essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
+         dplyr::select(GEOID, essentialworker_drove, essentialworker_pubtrans)   
+     }
+     
+     return(ACS_Essential_worker_estimates)
+     
    })
-# download commute mode by tract for essential workers
-acs_tracts_commute1 = get_acs_tracts_commute()
-dim(acs_tracts_commute1) # 2167, 3
+
+
+#ZCTA CENSUS DATA
+ACS_Data1 <- as.data.frame(acs.f("zcta", NULL, FALSE)) #download the zcta data
+ACS_Data2 <- clean_acs_data_and_derive_vars(ACS_Data1, "zcta")
+ACS_EssentialWrkr_Commute1 = as.data.frame(acs.f2("zcta",NULL))
+
+
+#TRACT CENSUS DATA  
+options(tigris_use_cache = TRUE)
+acs_tracts <- acs.f("tract", "NY", TRUE)
+acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
+acs_tracts_commute1 = as.data.frame(acs.f2("tract", "NY"))
+
 
 
 #### Identify the number of supermarkets/grocery stores per area ####
@@ -487,7 +464,7 @@ if(file.exists("data/grocers_geocode_2020-10-02.csv")){
 # Count by tract
 gctable = filter(gctable, score > 0)
 grocerSF = st_as_sf(gctable, coords = c("location.x", "location.y"), crs = 26918) %>% st_transform(crs = 2263)
-tractSF = acs_tracts2[, "GEOID"] %>% st_transform(crs = 2263)
+tractSF = acs_tracts2[, "GEOID"] %>% st_transform(., crs = 2263)
 tract_grocers = suppressWarnings(st_intersection(tractSF, grocerSF)) %>%
   st_set_geometry(., NULL) %>%
   group_by(GEOID) %>%
@@ -505,15 +482,6 @@ sum(zcta_grocers$grocers)
 nrow(zcta_grocers)
 range(zcta_grocers$grocers)
 
-# food_retail1 <- food_retail %>% #an estimate of how many supermarkets are in a ZCTA
-#   filter(County %in% NYC_boro_county_match$County) %>% #get rid of those that have the non_supermarket_strings words in their store & legal names
-#   filter(str_detect(`Establishment Type`, "J") & str_detect(`Establishment Type`, "A") & str_detect(`Establishment Type`, "C") &
-#            !str_detect(`Establishment Type`, "H")) %>%
-#   filter(!str_detect(`Entity Name`, non_supermarket_strings) & !str_detect(`DBA Name`, non_supermarket_strings)) %>%
-#   filter(`Square Footage`>=4500) %>%
-#   mutate(zcta = as.character(str_extract(Location, "[:digit:]{5}"))) %>%
-#   group_by(zcta) %>%
-#   summarise(grocers = n_distinct(`License Number`))
 
 ### Where are subway stations located? ###
 
@@ -522,7 +490,7 @@ SubwayStation_shp <- as_tibble(turnstile()$stations) %>%
   st_transform(., crs = 2263) %>%
   filter(!str_detect(ca, "PTH")) #removing New Jersey PATH stations
 
-### Calculate the residential area per ZCTA ###
+### Calculate the residential area ###
 
 Pluto_ResOnly <- Pluto %>%
   filter(landuse>="01" & landuse<="04") %>%
@@ -531,7 +499,8 @@ Pluto_ResOnly <- Pluto %>%
 
 ResBBLs <- as.character(Pluto_ResOnly$base_bbl)
 
-Res_Bldg_Footprints <- Bldg_Footprints %>% #zcta 
+#zcta-level residential area
+Res_Bldg_Footprints <- Bldg_Footprints %>%  
   st_set_geometry(., NULL) %>%
   mutate(base_bbl = as.character(base_bbl)) %>%
   filter(base_bbl %in% ResBBLs &
@@ -544,7 +513,8 @@ Res_Bldg_Footprints <- Bldg_Footprints %>% #zcta
   group_by(zcta) %>%
   summarise(total_res_volume_zcta = sum(res_volume, na.rm = TRUE)) 
 
-Res_Bldg_Footprints2 <- Bldg_Footprints %>% #tracts
+#tract level residential area 
+Res_Bldg_Footprints2 <- Bldg_Footprints %>% 
   st_transform(crs = 2263) %>%
   suppressWarnings(st_centroid(of_largest_polygon = TRUE)) %>%
   mutate(base_bbl = as.character(base_bbl)) %>%
@@ -559,6 +529,7 @@ res_bldg_tract_sum <- st_set_geometry(res_bldg_tract, NULL) %>%
   group_by(GEOID) %>%
   summarise(total_res_volume_tract = sum(res_volume, na.rm = TRUE))
 nrow(res_bldg_tract_sum) # 2125
+
 
 #### COVID Tests  ####
 MODZCTA_NYC_shp1 <- MODZCTA_NYC_shp %>%
@@ -657,7 +628,7 @@ tract_vars <- tractSF %>% # uses local CRS
          #pos_per_100000 = round(pos_per_100000, 0), 
          valid_var = "0",
          didnot_workhome_commute = 100 - workhome_commute,
-         one_over_grocers_per_1000 = if_else(is.infinite(1/grocers_per_1000), 0, 1/grocers_per_1000),
+         one_over_grocers_per_1000 = if_else(is.infinite(1/grocers_per_1000), (1/.0293)+1, 1/grocers_per_1000),
          one_over_medincome = 1/medincome) %>% 
   dplyr::select(-pubtrans_subway_commute, -pubtrans_ferry_commute) %>%
   mutate_at(vars(starts_with("essentialworker_")), ~round((./over16total_industry1)*100, 2))
@@ -701,7 +672,7 @@ tract_to_modzcta2 <- dplyr::select(tract_modzcta_pop2, -total_pop1)
 
 #### Part 1: Creation of BWQS Neighborhood Infection Risk Scores ####
 
-#Step 1: Create univariate scatterplots to make sure direction of associations are consistent for all variables, otherwise BWQS is biased
+#Step 1: Create univariate scatterplots to make sure direction of associations are consistent for all variables
 ggplot(ZCTA_ACS_COVID, aes(x = testing_ratio, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") #covariate
 ggplot(ZCTA_ACS_COVID, aes(x = one_over_medincome, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
 ggplot(ZCTA_ACS_COVID, aes(x = not_insured, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
