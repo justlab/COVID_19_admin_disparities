@@ -608,40 +608,122 @@ BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "
 colnames(BWQS_predicted_infection_median_testing) <- "predicted"
 
 # predictions at the median BWQS index value
-BWQS_prediction_medianbwqs = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
+testing_prediction_medianbwqs = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * median(BWQS_index$BWQS_index)) + 
-   K %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)])
-colnames(BWQS_prediction_medianbwqs) <- "predicted"
+   K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), 1:3]))
 
 # negative binomial model with linear term for testing_ratio (no BWQS)
 nb_testing_linear<-glm.nb(y~ZCTA_ACS_COVID$testing_ratio)
-mean(abs(y - exp(predict(nb_testing_linear))))
+mean(abs(y - exp(predict(nb_testing_linear)))) # MAE
+sqrt(mean((y - exp(predict(nb_testing_linear)))^2)) # RMSE
 # negative binomial with spline for testing_ratio (no BWQS)
 nb_testing_ns3df<-glm.nb(y~ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
-mean(abs(y - exp(predict(nb_testing_ns3df))))
+mean(abs(y - exp(predict(nb_testing_ns3df)))) # MAE
+sqrt(mean((y - exp(predict(nb_testing_ns3df)))^2)) # RMSE
 
 # mean absolute error of predictions from our full model
-mean(abs(y - BWQS_prediction$predicted))
+mean(abs(y - BWQS_prediction$predicted)) # MAE
+sqrt(mean((y - BWQS_prediction$predicted)^2)) # RMSE
+
+# Visualize the relationship between BWQS and test_ratio
+ggplot(data.frame(BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, BWQS_index)) + geom_point() + 
+  geom_smooth() + geom_smooth(color = "red", method = "lm")
+# BWQS is correlated with testing_ratio
+cor.test(BWQS_index$BWQS_index, ZCTA_ACS_COVID$testing_ratio, method = "spearman")  
 
 # Visualize the relationship between infection rate and test_ratio
 # infections versus testing ratio with smoothers
 ggplot(data.frame(y, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, y)) + geom_point() + 
-  geom_smooth(color = "red", method = "glm.nb") + 
+  ylab("infections per 100,000") + 
+  geom_smooth(color = "red", formula = y ~ x, method = "glm.nb") + 
   stat_smooth(color = "green", method = "gam", formula = y ~ s(x), method.args = list(family = "nb"), se = F) +
   geom_smooth(method = "glm.nb", formula = y ~ splines::ns(x, 3), se = FALSE)
 
-# Visualize the relationship between BWQS index and infection rate
+# Partial regression plot for BWQS index
+nb_testing_ns3df <- glm.nb(y ~ ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+yresid <- resid(nb_testing_ns3df)
+bwqs_testing_ns3df <- lm(BWQS_index$BWQS_index ~ ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+bwqsresid <- resid(bwqs_testing_ns3df)
+ggplot(data.frame(yresid, bwqsresid), aes(bwqsresid, yresid)) + geom_point() + 
+  geom_smooth(formula = y ~ x, method = "lm", se = F) + 
+  ylab("residual log infection rate\n(adjusted for testing)") + xlab("residual BWQS infection risk index\n(adjusted for testing)")
+summary(lm(yresid ~ bwqsresid))
+
+# change in residuals adding in BWQS
+nb_testing_ns3df <- glm.nb(y ~ ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+yresid <- resid(nb_testing_ns3df)
+nb_testing_ns3df_bwqs <- glm.nb(y ~ BWQS_index$BWQS_index + ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+yresid_full <- resid(nb_testing_ns3df_bwqs)
+ggplot(data.frame(yresid, yresid_full), aes(yresid, yresid_full)) + geom_point() + 
+  scale_y_continuous(breaks = -4:3) + 
+  coord_fixed() + 
+  theme(aspect.ratio=1)
+
+# Visualize the full model observed vs predicted
+ggplot(data.frame(pred = BWQS_prediction$predicted, y), aes(pred, y)) + 
+  geom_point() +  
+  geom_abline(linetype = "dashed", color = "grey10") + 
+  coord_fixed() + 
+  theme(aspect.ratio=1)
+
+# partial residual plot
+preddf <- data.frame(y, BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_COVID$testing_ratio, pred = BWQS_prediction$predicted)
+preddf$partialbwqs <- log(preddf$y) - log(preddf$pred) + (BWQS_params[BWQS_params$label == "beta1", ]$mean * preddf$BWQS_index)
+ggplot(preddf, aes(BWQS_index, partialbwqs)) + geom_point() + geom_smooth(se = F) + geom_smooth(method = "lm", color = "red")
+partialresid <- residuals(glm.nb(y ~ BWQS_index + ns(testing_ratio, df = 3), data = preddf), "partial")
+colnames(partialresid) <- c("residpartialbwqs", "residpartialnstesting")
+ggplot(data.frame(preddf, partialresid), aes(BWQS_index, residpartialbwqs)) + geom_point() + geom_smooth() + geom_smooth(method = "lm", color = "red")
+summary(lm(residpartialbwqs ~ BWQS_index, data = data.frame(preddf, partialresid)))
+ggplot(preddf, aes(BWQS_index, y-pred)) + geom_point() + geom_smooth(se = F) + geom_smooth(method = "lm", color = "red")
+
+# Visualize the relationship between BWQS index and infection rate at the median testing_ratio
 BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
   geom_line(aes(y = predicted)) + 
   scale_x_continuous("BWQS infection risk index") + 
   scale_y_continuous("Infections per 100,000", label=comma)
-BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", xparams = list(binwidth = 1), yparams = list(binwidth = 200))
+BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", margins = "x", xparams = list(binwidth = 1))
 BWQS_scatter
 if(export.figs) {
   png(filename = here("figures", paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
   print(BWQS_scatter)
   dev.off()
 }
+
+# Visualize the relationship between testing_ratio and infection rate at the median BWQS
+testing_scatter <- ggplot(data.frame(BWQS_index, y, testing_predicted_infection_median_BWQS = testing_prediction_medianbwqs, testing_ratio = ZCTA_ACS_COVID$testing_ratio), 
+                          aes(testing_ratio, y)) + 
+  geom_ribbon(aes(ymin = testing_predicted_infection_median_BWQS.2.5., ymax = testing_predicted_infection_median_BWQS.97.5.), alpha = 0.2) + 
+  geom_line(aes(y = testing_predicted_infection_median_BWQS.mean)) + 
+  geom_point() + 
+  scale_x_continuous("Tests per capita") + 
+  scale_y_continuous("Infections per 100,000", label=comma) + 
+  theme(axis.title.y = element_blank(), axis.text.y=element_blank())
+testing_scatter <- ggExtra::ggMarginal(testing_scatter, type = "histogram", xparams = list(binwidth = 0.005), yparams = list(binwidth = 200))
+testing_scatter
+if(export.figs) {
+  png(filename = here("figures", paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
+  print(BWQS_scatter)
+  dev.off()
+}
+
+# Bayes R2 for negative binomial based on
+# http://www.stat.columbia.edu/~gelman/research/unpublished/bayes_R2.pdf
+
+bayes_R2_NB <- function(fit) {
+  y_pred = exp(extract(fit,"eta")$eta)
+  var_fit = apply(y_pred, 1, var)
+  mean_fit = apply(y_pred, 1, mean)
+  phi = extract(fit,"phi")$phi
+  var_res = mean_fit  + (mean_fit^2)/phi
+  r2 = var_fit / (var_fit + var_res)
+  return(list(meanr2 = mean(r2),
+              medianr2 = median(r2)))
+}
+
+# We extract mean and median of R2 distribution
+bayes_R2_NB(m1)
+
+
 
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
