@@ -410,13 +410,13 @@ pm(fst = T,
 
 
 #ZCTA CENSUS DATA
+options(tigris_use_cache = TRUE)
 ACS_Data1 <- as.data.frame(acs.f("zcta", NULL, FALSE)) #download the zcta data
 ACS_Data2 <- clean_acs_data_and_derive_vars(ACS_Data1, "zcta")
 ACS_EssentialWrkr_Commute1 = as.data.frame(acs.f2("zcta",NULL))
 
 
 #TRACT CENSUS DATA  
-options(tigris_use_cache = TRUE)
 acs_tracts <- acs.f("tract", "NY", TRUE)
 acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
 acs_tracts_commute1 = as.data.frame(acs.f2("tract", "NY"))
@@ -528,7 +528,7 @@ res_bldg_tract <- st_intersection(Res_Bldg_Footprints2, tractSF)
 res_bldg_tract_sum <- st_set_geometry(res_bldg_tract, NULL) %>%
   group_by(GEOID) %>%
   summarise(total_res_volume_tract = sum(res_volume, na.rm = TRUE))
-nrow(res_bldg_tract_sum) # 2125
+nrow(res_bldg_tract_sum) # 2132
 
 
 #### COVID Tests  ####
@@ -587,7 +587,7 @@ ZCTA_ACS_COVID_shp <- MODZCTA_NYC_shp1 %>%
   left_join(., May7_tests, by = "zcta") %>%
   left_join(., Res_Bldg_Footprints, by = "zcta") %>%
   left_join(., ACS_EssentialWrkr_Commute1, by = "zcta") %>%
-  left_join(., food_retail1, by = "zcta") %>%
+  left_join(., zcta_grocers, by = c("zcta" = "modzcta")) %>%
   mutate(pop_density = as.numeric(total_pop1/st_area(geometry)),
          avg_hhold_size = round((total_pop1/total_hholds1), 2),
          pos_per_100000 = (Positive/total_pop1)*100000,
@@ -610,7 +610,6 @@ ZCTA_ACS_COVID_shp <- MODZCTA_NYC_shp1 %>%
 ZCTA_ACS_COVID <- ZCTA_ACS_COVID_shp %>%
   st_set_geometry(., NULL) #remove geometry
 
-
 tract_vars <- tractSF %>% # uses local CRS
   left_join(., st_set_geometry(acs_tracts2, NULL), by = "GEOID") %>%
   left_join(., acs_tracts_commute1, by = "GEOID") %>%
@@ -618,14 +617,11 @@ tract_vars <- tractSF %>% # uses local CRS
   left_join(., tract_grocers, by = "GEOID") %>%
   mutate(pop_density = as.numeric(total_pop1/st_area(geometry)),
          avg_hhold_size = round((total_pop1/total_hholds1), 2),
-         #pos_per_100000 = (Positive/total_pop1)*100000, 
-         #testing_ratio = (total_tests/total_pop1), 
          res_vol_zctadensity = as.numeric(total_res_volume_tract/st_area(geometry)), 
          res_vol_popdensity = as.numeric(total_pop1/total_res_volume_tract),
          pubtrans_ferrysubway_commute = pubtrans_subway_commute + pubtrans_ferry_commute,
          grocers = replace_na(grocers, 0),
          grocers_per_1000 = (grocers/total_pop1)*1000,
-         #pos_per_100000 = round(pos_per_100000, 0), 
          valid_var = "0",
          didnot_workhome_commute = 100 - workhome_commute,
          one_over_grocers_per_1000 = if_else(is.infinite(1/grocers_per_1000), (1/.0293)+1, 1/grocers_per_1000),
