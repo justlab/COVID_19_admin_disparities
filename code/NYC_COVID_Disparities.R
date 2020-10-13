@@ -722,32 +722,97 @@ bind_cols(Variables = SES_vars,
   dplyr::select(-V1...2, -V1...3) 
 
 #Step 3: Prepare data for BWQS and pass to stan for model fitting 
-y = as.numeric(ZCTA_ACS_COVID$pos_per_100000)
-X <- ZCTA_ACS_COVID %>%
-  dplyr::select(all_of(SES_vars))
-K <- ns(ZCTA_ACS_COVID$testing_ratio, df = 3)
-for (vname in SES_vars)
+pm(fit_BWQS_model <- function(df){
+  y = as.numeric(df$pos_per_100000)
+  X <- df %>%
+    dplyr::select(all_of(SES_vars))
+  K <- ns(df$testing_ratio, df = 3)
+  for (vname in SES_vars)
     X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10
-data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
+  data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
+  
+  data_list = list(N      = NROW(data),
+                   N_new  = NROW(data),
+                   C      = NCOL(X),
+                   K      = NCOL(K),
+                   XC     = cbind(as.matrix(X)),
+                   XK     = cbind(K),
+                   XC_new = cbind(as.matrix(X)),
+                   XK_new = cbind(K),
+                   Dalp   = rep(1,length(SES_vars)),
+                   y      = as.vector(data$y))
+  
+  fitted_model <- stan(
+    file = BWQS_stan_model,
+    data = data_list,
+    chains = 1,
+    warmup = 2500,
+    iter = 20000,
+    cores = 1,
+    thin = 10,
+    refresh = 0,
+    algorithm = "NUTS",
+    seed = 1234,
+    control = list(max_treedepth = 20,
+                   adapt_delta = 0.999999999999999))
+  
+  return(fitted_model)
+})
 
-data_list = list(N  = NROW(data), 
-                 C  = NCOL(X), 
-                 K  = NCOL(K), 
-                 XC = cbind(as.matrix(X)), 
-                 XK = cbind(K), 
-                 Dalp = rep(1,length(SES_vars)), 
-                 y = as.vector(data$y))
+Compute_Bayes_R2 <- function(fit) {
+  y_pred = exp(extract(fit,"eta")$eta)
+  var_fit = apply(y_pred, 1, var)
+  mean_fit = apply(y_pred, 1, mean)
+  phi = extract(fit,"phi")$phi
+  var_res = mean_fit  + (mean_fit^2)/phi
+  r2 = var_fit / (var_fit + var_res)
+  return(list(meanr2 = mean(r2),
+              medianr2 = median(r2)))
+}
+# # 
+# y = as.numeric(ZCTA_ACS_COVID$pos_per_100000)
+# X <- ZCTA_ACS_COVID %>%
+#   dplyr::select(all_of(SES_vars))
+# K <- ns(ZCTA_ACS_COVID$testing_ratio, df = 3)
+# for (vname in SES_vars)
+#     X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10
+# data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
 
-pm(stan.model <- function()
-     stan(file = BWQS_stan_model,
-                         data = data_list, chains = 1,
-                         warmup = 2500, iter = 20000, cores = 1,
-                         thin = 10, refresh = 0, algorithm = "NUTS",
-                         seed = 1234, control = list(max_treedepth = 20,
-                                                     adapt_delta = 0.999999999999999)))
-m1 = stan.model()
-# detach("package:raster", unload = TRUE) # may be needed
+# "NB_BWQS_prediction.stan"
+# The code is very similar to the old one
+# but we have the new set of parameter
+
+
+ # data_list = list(N  = NROW(data),
+ #                  C  = NCOL(X),
+ #                  K  = NCOL(K),
+ #                  XC = cbind(as.matrix(X)),
+ #                  XK = cbind(K),
+ #                  Dalp = rep(1,length(SES_vars)),
+ #                  y = as.vector(data$y))
+
+     # m2 <- stan(file = BWQS_stan_model,
+     #                     data = data_list, chains = 1,
+     #                     warmup = 2500, iter = 20000, cores = 1,
+     #                     thin = 10, refresh = 0, algorithm = "NUTS",
+     #                     seed = 1234, control = list(max_treedepth = 20,
+     #                                                 adapt_delta = 0.999999999999999))#)
+m1 <- fit_BWQS_model(ZCTA_ACS_COVID)
 extract_waic(m1)
+Compute_Bayes_R2(m1)$meanr2
+colMedians(extract(m1,"y_new")$y_new)
+colMeans(extract(m1,"y_new")$y_new)
+Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMedians(extract(m1,"y_new")$y_new)) %>%
+  dplyr::select(pos_per_100000,Prediction, geometry) %>%
+  mutate(std_residual = (pos_per_100000-Prediction)/sd(pos_per_100000-Prediction))
+
+ggplot(data = Residuals) + geom_sf(aes(fill = std_residual)) +
+  scale_fill_gradient2(midpoint = 0, high = "green", mid = "white", low = "red")
+
+# 
+# m1 = stan.model()
+# detach("package:raster", unload = TRUE) # may be needed
+
 
 vars = c("phi", "beta0", "beta1", paste0("delta", 1:3), SES_vars)
 parameters_to_drop <- c("phi", paste0("delta", 1:3), "beta0", "beta1")
@@ -790,11 +855,11 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
 fig2
 if(export.figs) ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 8)
 
-Cors_SESVars_quantiled <- cor(X, method = "kendall")  
-Cors_SESVars_quantiled1 <- as.data.frame(Cors_SESVars_quantiled)
-Cors_SESVars_quantiled1$var1 <- row.names(Cors_SESVars_quantiled1)
-Cors_SESVars_quantiled2 <- gather(data = Cors_SESVars_quantiled1, key = "var2", value = "correlation", -var1) %>%
-  filter(var1 != var2)
+# Cors_SESVars_quantiled <- cor(X, method = "kendall")  
+# Cors_SESVars_quantiled1 <- as.data.frame(Cors_SESVars_quantiled)
+# Cors_SESVars_quantiled1$var1 <- row.names(Cors_SESVars_quantiled1)
+# Cors_SESVars_quantiled2 <- gather(data = Cors_SESVars_quantiled1, key = "var2", value = "correlation", -var1) %>%
+#   filter(var1 != var2)
 
 #Step 4: Use the variable-specific weight on the decile quantile splits to create a 10 point ZCTA-level infection risk score  
 
@@ -806,11 +871,11 @@ BWQS_index <- ZCTA_ACS_COVID2 %>%
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
   dplyr::select(BWQS_index) 
 
-# extract predictions
-BWQS_prediction = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
-  (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-   K %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)])
-colnames(BWQS_prediction) <- "predicted"
+# # extract predictions
+# BWQS_prediction = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
+#   (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
+#    K %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)])
+# colnames(BWQS_prediction) <- "predicted"
 
 # predictions at the median testing_ratio
 BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
@@ -850,11 +915,11 @@ cor.test(BWQS_index$BWQS_index, ZCTA_ACS_COVID$testing_ratio, method = "spearman
 
 # Visualize the relationship between infection rate and test_ratio
 # infections versus testing ratio with smoothers
-ggplot(data.frame(y, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, y)) + geom_point() + 
-  ylab("infections per 100,000") + 
-  geom_smooth(color = "red", formula = y ~ x, method = "glm.nb") + 
-  stat_smooth(color = "green", method = "gam", formula = y ~ s(x), method.args = list(family = "nb"), se = F) +
-  geom_smooth(method = "glm.nb", formula = y ~ splines::ns(x, 3), se = FALSE)
+# ggplot(data.frame(y, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, y)) + geom_point() + 
+#   ylab("infections per 100,000") + 
+#   geom_smooth(color = "red", formula = y ~ x, method = "glm.nb") + 
+#   stat_smooth(color = "green", method = "gam", formula = y ~ s(x), method.args = list(family = "nb"), se = F) +
+#   geom_smooth(method = "glm.nb", formula = y ~ splines::ns(x, 3), se = FALSE)
 
 # Partial regression plot for BWQS index
 nb_testing_ns3df <- glm.nb(y ~ ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
@@ -923,24 +988,6 @@ if(export.figs) {
   dev.off()
 }
 
-# Bayes R2 for negative binomial based on
-# http://www.stat.columbia.edu/~gelman/research/unpublished/bayes_R2.pdf
-
-bayes_R2_NB <- function(fit) {
-  y_pred = exp(extract(fit,"eta")$eta)
-  var_fit = apply(y_pred, 1, var)
-  mean_fit = apply(y_pred, 1, mean)
-  phi = extract(fit,"phi")$phi
-  var_res = mean_fit  + (mean_fit^2)/phi
-  r2 = var_fit / (var_fit + var_res)
-  return(list(meanr2 = mean(r2),
-              medianr2 = median(r2)))
-}
-
-# We extract mean and median of R2 distribution
-bayes_R2_NB(m1)
-
-
 
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
@@ -971,10 +1018,15 @@ fig3
 if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 600, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
-Demographics <- ACS_Data1 %>% rename(zcta = "GEOID") %>%
-  dplyr::select(zcta,ends_with("_raceethnic"), total_pop1) %>%
-  mutate(other_raceethnic = total_pop1 - (rowSums(.[2:6])))
-
+Demographics <- ACS_Data1 %>% 
+  dplyr::select(GEOID, ends_with("_raceethnic"), total_pop1) %>%
+  left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
+  group_by(MODZCTA) %>%
+  summarise_at(vars(ends_with("_raceethnic"), total_pop1), ~sum(.)) %>%
+  mutate(zcta = as.character(MODZCTA),
+         other_raceethnic = total_pop1 - (hisplat_raceethnic + nonhispLat_white_raceethnic + nonhispLat_black_raceethnic + 
+                                            nonhispLat_amerindian_raceethnic + nonhispLat_asian_raceethnic))
+  
 ZCTA_BQWS <- ZCTA_BWQS_COVID_shp %>%
   st_set_geometry(., NULL) %>%
   dplyr::select(zcta, BWQS_index)
@@ -987,13 +1039,14 @@ Demographics_for_ridges <- Demographics %>%
                                     if_else(`Race/Ethnicity`=="nonhispLat_black_raceethnic", "Black",
                                             if_else(`Race/Ethnicity`=="nonhispLat_white_raceethnic", "White",
                                                     if_else(`Race/Ethnicity`== "nonhispLat_asian_raceethnic", "Asian", "Other")))),
-         `Race/Ethnicity` = factor(`Race/Ethnicity`, levels = c( "White",  "Asian", "Other","Hispanic/Latinx","Black"))) 
+         `Race/Ethnicity` = factor(`Race/Ethnicity`, levels = c( "White",  "Asian", "Other","Hispanic/Latinx","Black")),
+         Population = as.numeric(Population)) 
 
 
-Demographics_for_ridges %>%
+View(Demographics_for_ridges %>%
   group_by(`Race/Ethnicity`) %>%
   summarise(weighted.mean(BWQS_index, Population),
-            weightedMedian(BWQS_index, Population))
+            weightedMedian(BWQS_index, Population)))
 
 
 fig4 <- ggplot(Demographics_for_ridges,
@@ -1131,33 +1184,33 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
 #         round(max(abs(Cors_SESVars2$correlation)),2))
 # }
 # check_all_cor(SES_zcta_median)
-pm(
-  run_stan <- function(ses_testing_zcta, ses_varnames){
-    y <- ses_testing_zcta$pos_per_100000
-    X <- ses_testing_zcta %>% dplyr::select(all_of(ses_varnames))
-    K <- ses_testing_zcta$testing_ratio
-    for (vname in ses_varnames){
-      X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10}
-    model_data <- as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
-    
-    model_data_list = list(N  = NROW(model_data), 
-                           C  = NCOL(X), 
-                           K  = NCOL(K), 
-                           XC = cbind(as.matrix(X)), 
-                           XK = cbind(K), 
-                           Dalp = rep(1,length(ses_varnames)), 
-                           y = as.vector(model_data$y))
-    
-    model_output <- stan(file = BWQS_stan_model,
-                         data = model_data_list, chains = 1,
-                         warmup = 2500, iter = 20000, cores = 1,
-                         thin = 10, refresh = 0, algorithm = "NUTS",
-                         seed = 1234, control = list(max_treedepth = 20,
-                                                     adapt_delta = 0.999999999999999))
-    
-    
-    list(model_output = model_output, quantiled_vars = X)
-  })
+# pm(
+#   run_stan <- function(ses_testing_zcta, ses_varnames){
+#     y <- ses_testing_zcta$pos_per_100000
+#     X <- ses_testing_zcta %>% dplyr::select(all_of(ses_varnames))
+#     K <- ses_testing_zcta$testing_ratio
+#     for (vname in ses_varnames){
+#       X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10}
+#     model_data <- as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
+#     
+#     model_data_list = list(N  = NROW(model_data), 
+#                            C  = NCOL(X), 
+#                            K  = NCOL(K), 
+#                            XC = cbind(as.matrix(X)), 
+#                            XK = cbind(K), 
+#                            Dalp = rep(1,length(ses_varnames)), 
+#                            y = as.vector(model_data$y))
+#     
+#     model_output <- stan(file = BWQS_stan_model,
+#                          data = model_data_list, chains = 1,
+#                          warmup = 2500, iter = 20000, cores = 1,
+#                          thin = 10, refresh = 0, algorithm = "NUTS",
+#                          seed = 1234, control = list(max_treedepth = 20,
+#                                                      adapt_delta = 0.999999999999999))
+#     
+#     
+#     list(model_output = model_output, quantiled_vars = X)
+#   })
 
 m2_median <- run_stan(SES_zcta_median_testing, SES_vars_median)
 extract_waic(m2_median$model_output)
@@ -1243,30 +1296,17 @@ Subway_BWQS_df <- Subway_ridership_by_UHF %>%
 
 fit_drm_all <- drm(usage.median.ratio ~ time_index, fct = W2.4(), data = Subway_BWQS_df)
 plot(fit_drm_all)
-fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = F)
+fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = T)
 
 # fit_drm_risk_high <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="High")
 # fit_drm_risk_low <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="Low")
 anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
-
-confint(fit_drm_risk_high)
-confint(fit_drm_risk_low)
-# compParm(fit_drm_interact, "b", "-")
-# compParm(fit_drm_interact, "c", "-")
-
 
 summary(fit_drm_interact)
 confint(fit_drm_interact)
 compParm(fit_drm_interact, "b", "-")
 compParm(fit_drm_interact, "c", "-")
 
-#b is not actually a slope - but a scaling factor that needs to be transformed into the slope
-# slopes <- as_tibble(coef(fit_drm_risk_high), rownames = "vars") %>%
-#   bind_cols(BWQS_risk = "high") %>%
-#   bind_rows(as_tibble(coef(fit_drm_risk_low), rownames = "vars") %>% bind_cols(BWQS_risk = "low")) %>%
-#   mutate(vars = str_remove(vars, fixed(":(Intercept)"))) %>%
-#   spread(., vars, value) %>%
-#   mutate(slope = -b*(-d/(4*e))) 
 
 slopes <- as_tibble(coef(fit_drm_interact), rownames = "vars") %>%
   separate(col = vars, into = c("vars", "BWQS_risk"), sep = ":") %>%
@@ -1281,30 +1321,8 @@ as_tibble(confint(fit_drm_interact), rownames = "vars") %>%
   slope_higher_ci = -`97.5 %`*(-d/(4*e))) %>%
   dplyr::select(BWQS_risk, slope, slope_lower_ci, slope_higher_ci)
 
-# as_tibble(confint(fit_drm_risk_high), rownames = "vars") %>%
-#   bind_cols(BWQS_risk = "high") %>%
-#   bind_rows(as_tibble(confint(fit_drm_risk_low), rownames = "vars") %>% bind_cols(BWQS_risk = "low")) %>%
-#   mutate(vars = str_remove(vars, fixed(":(Intercept)"))) %>%
-#   filter(vars == "b") %>%
-#   right_join(., slopes, by = "BWQS_risk") %>%
-#   mutate(slope_lower_ci = -`2.5 %`*(-d/(4*e)),
-#          slope_higher_ci = -`97.5 %`*(-d/(4*e))) %>%
-#   dplyr::select(BWQS_risk, slope, slope_lower_ci, slope_higher_ci)
 
-# fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_risk_high, interval = "confidence"), warning = handler) %>% 
-#                                    bind_cols(., Risk = "High")) %>%
-#   #mutate(time_index = row_number()) %>%
-#   bind_rows(., as_tibble(withCallingHandlers(predict(fit_drm_risk_low, interval = "confidence"), 
-#                                           warning = handler ) %>% bind_cols(., Risk = "Low"))) # %>% mutate(time_index = row_number()) 
-
-
-# ggplot(data = fit_drm_predictions) + geom_ribbon(aes(x = time_index, ymin = Lower, ymax = Upper, group = Risk)) + 
-#   geom_line(data = fit_drm_predictions, aes(x = time_index, y = Prediction, color = Risk))
-# 
-# Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df %>% arrange(Risk, date), 
-#                              fit_drm_predictions %>% dplyr::select(-Risk)) 
-
-fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler ))
+fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler))
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
 Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
