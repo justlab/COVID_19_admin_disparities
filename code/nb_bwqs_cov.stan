@@ -3,7 +3,7 @@
 data {
   int<lower=1> N;          // rows of data
   int<lower=1> N_new;      // rows of new data
-  int<lower=0> C;          // chemicals of the mixture
+  int<lower=0> C;          // social variables of the mixture
   int<lower=0> K;          // number of covariates
   matrix[N,C] XC;          // matrix of elements in the first mixture
   matrix[N,K] XK;          // matrix of predictors
