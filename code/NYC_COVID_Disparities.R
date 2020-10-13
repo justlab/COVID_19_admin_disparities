@@ -422,7 +422,6 @@ acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
 acs_tracts_commute1 = as.data.frame(acs.f2("tract", "NY"))
 
 
-
 #### Identify the number of supermarkets/grocery stores per area ####
 non_supermarket_strings <- c("DELI|TOBACCO|GAS|CANDY|7 ELEVEN|7-ELEVEN|LIQUOR|ALCOHOL|BAKERY|CHOCOLATE|DUANE READE|WALGREENS|CVS|RITE AID|RAVIOLI|WINERY|WINE|BEER|CAFE|COFFEE")
 
@@ -434,14 +433,15 @@ food_retail_filtered <- food_retail %>%
   filter(`Square Footage`>=4500) %>%
   mutate(zcta = as.character(str_extract(Location, "[:digit:]{5}"))) %>% 
   mutate(Address = paste(paste(`Street Number`, `Street Name`), City, State, zcta, sep = ","))
-dim(food_retail_filtered) # 1037,16
+nrow(food_retail_filtered) # 1037
 
 # Geocode grocers, using a cached version if available to make analysis reproducible
 # The geocoding service may be updated in the future and give different results
-if(file.exists("data/grocers_geocode_2020-10-02.csv")){
+if(file.exists("data/grocers_geocode_2020-10-02.csv") & use_repo_data){
   gctable <- read.csv("data/grocers_geocode_2020-10-02.csv")
   failed = which(gctable$score == 0)
-  message("Loaded cached geocoded grocers: ", nrow(food_retail_filtered)-length(failed), "/", nrow(food_retail_filtered), " have coordinates.")
+  message("Loaded cached geocoded grocers: ", nrow(gctable)-length(failed), "/", nrow(gctable), " have coordinates.")
+  if(nrow(gctable) != nrow(food_retail_filtered)) warning("Cached geocoded table has different row count than non-geocoded table")
 } else {
   # locations are returned in crs=26918, UTM 18N NAD83
   api = "https://gisservices.its.ny.gov/arcgis/rest/services/Locators/Street_and_Address_Composite/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&SingleLine="
@@ -461,7 +461,7 @@ if(file.exists("data/grocers_geocode_2020-10-02.csv")){
   write.csv(gctable, paste0("data/grocers_geocode_", Sys.Date(), ".csv"))
 }
 
-# Count by tract
+# Count grocers by tract
 gctable = filter(gctable, score > 0)
 grocerSF = st_as_sf(gctable, coords = c("location.x", "location.y"), crs = 26918) %>% st_transform(crs = 2263)
 tractSF = acs_tracts2[, "GEOID"] %>% st_transform(., crs = 2263)
@@ -472,15 +472,15 @@ tract_grocers = suppressWarnings(st_intersection(tractSF, grocerSF)) %>%
 nrow(tract_grocers) # 754
 sum(tract_grocers$grocers) # 997
 
-#Count by ZCTA 
+#Count grocers by ZCTA 
 zctaSF <- MODZCTA_NYC_shp %>% dplyr::select(modzcta, geometry) %>% st_transform(crs = 2263) 
 zcta_grocers <- suppressWarnings(st_intersection(zctaSF, grocerSF)) %>%
   st_set_geometry(., NULL) %>%
   group_by(modzcta) %>%
   summarise(grocers = n_distinct(`address`))
-sum(zcta_grocers$grocers)
-nrow(zcta_grocers)
-range(zcta_grocers$grocers)
+sum(zcta_grocers$grocers) # 997
+nrow(zcta_grocers) # 172
+range(zcta_grocers$grocers) # 1, 21
 
 
 ### Where are subway stations located? ###
