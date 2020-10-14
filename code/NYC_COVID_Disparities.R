@@ -222,10 +222,10 @@ modzcta_to_zcta <- download(
   "ZCTA-to-MODZCTA.csv",
   read_csv
 )
-# download Tract to ZIP crosswalk from HUD
-tract_to_zip <- download(
-  "https://www.huduser.gov/portal/datasets/usps/TRACT_ZIP_062020.xlsx",
-  "TRACT_ZIP_062020.xlsx",
+# download ZIP to Tract crosswalk from HUD
+zip_to_tract <- download(
+  "https://www.huduser.gov/portal/datasets/usps/ZIP_TRACT_062020.xlsx",
+  "ZIP_TRACT_062020.xlsx",
   function(p) read_excel(path = p, col_types = c("text", "text", "numeric", "skip", "skip", "skip"))
 )
 
@@ -634,23 +634,38 @@ tract_vars <- tractSF %>% # uses local CRS
 # prepare tract->zip weights by summing RES_RATIO when multiple ZIPs combine to a single MODZCTA
 modzcta_to_zcta_chr <- data.frame(ZCTA = as.character(modzcta_to_zcta$ZCTA), 
                                   MODZCTA = as.character(modzcta_to_zcta$MODZCTA))
-tract_to_modzcta <- tract_to_zip %>% 
-  left_join(., modzcta_to_zcta_chr, by = c("ZIP" = "ZCTA")) %>%
-  filter(!is.na(MODZCTA)) %>%
-  group_by(MODZCTA, TRACT) %>%
-  dplyr::summarize(SUM_RES_RATIO = sum(RES_RATIO), .groups = "drop") 
+modzcta_to_zcta_pop <- modzcta_to_zcta_chr %>%
+  left_join(ACS_Data1[, c("GEOID", "total_pop1")], by = c("ZCTA" = "GEOID")) %>% 
+  group_by(MODZCTA) %>%
+  mutate(sum_pop = sum(total_pop1)) %>%
+  ungroup() %>%
+  mutate(pop_prop = total_pop1/sum_pop) %>% 
+  arrange(MODZCTA)
+modzcta_to_zcta_pop
 
-# length(unique(tract_to_modzcta$MODZCTA)) #  177
-# length(unique(tract_to_modzcta$TRACT))   # 2188
+modzcta_to_tract <- modzcta_to_zcta_pop %>%
+  filter(MODZCTA != "99999") %>% 
+  left_join(zip_to_tract, by = c("ZCTA" = "ZIP")) %>%
+  mutate(scaled_res_ratio = RES_RATIO * pop_prop) %>% 
+  # note: MODZCTA 10001 & 10007 contain a ZCTA with a small share of population
+  # but a zero share of RES_RATIO. This makes their sum of scaled_res_ratio by
+  # MODZCTA less than 1, but this will not effect the weighted median or 3Q values
+  # by tract.
+  group_by(MODZCTA, TRACT) %>%
+  dplyr::summarize(SUM_RES_RATIO = sum(scaled_res_ratio), .groups = "drop") 
+modzcta_to_tract
+
+# length(unique(modzcta_to_tract$MODZCTA)) #  177
+# length(unique(modzcta_to_tract$TRACT))   # 2188
 # length(unique(tractSF$GEOID))            # 2167
 
 # check res_ratio against tracts with no population
-tract_modzcta_pop <- tract_to_modzcta %>%
+tract_modzcta_pop <- modzcta_to_tract %>%
   left_join(acs_tracts2, by = c("TRACT" = "GEOID")) %>%
   dplyr::select(MODZCTA, TRACT, total_pop1, SUM_RES_RATIO)
 
 # checking for tracts with no population but res_ratio > 0
-tract_modzcta_pop %>% filter(MODZCTA == "11697") # still has a zero pop tract with res_ratio = 1
+tract_modzcta_pop %>% filter(MODZCTA == "11697") # still has a zero pop tract with res_ratio > 0
 tract_modzcta_pop %>% filter(total_pop1 == 0 & SUM_RES_RATIO > 0) %>% nrow() # 30
 # set tracts with no population to have a res_ratio of 0
 tract_modzcta_pop2 <- tract_modzcta_pop %>% 
@@ -660,8 +675,8 @@ tract_modzcta_pop2 <- tract_modzcta_pop %>%
 
 # check to make sure no MODZCTA have all zeroes for all tract res_ratios
 tract_modzcta_pop2 %>% group_by(MODZCTA) %>% filter(all(SUM_RES_RATIO == 0)) %>% nrow() # 0
-tract_modzcta_pop2 %>% filter(MODZCTA == "10020") # this MODZCTA doesn't exist, but the ZIP did and had all zeroes
-tract_to_modzcta2 <- dplyr::select(tract_modzcta_pop2, -total_pop1)
+tract_modzcta_pop2 %>% filter(MODZCTA == "10020") # this MODZCTA doesn't exist, but the ZIP did and had all zeroes for RES_RATIO by tract
+modzcta_to_tract2 <- dplyr::select(tract_modzcta_pop2, -total_pop1)
 
 ### Cleaning done --- Now for the Analysis ###
 
@@ -1160,8 +1175,8 @@ get_tract_vars_by_zcta <- function(tract_vars, modzcta_tract_crosswalk, whichq){
 
 SES_vars_median = names(SES_zcta_median)[names(SES_zcta_median) != "MODZCTA"]
 
-# get_tract_vars_by_zcta(tract_vars, tract_to_modzcta2, "q3")
-SES_zcta_median <- get_tract_vars_by_zcta(tract_vars, tract_to_modzcta2, "median")
+# get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "q3")
+SES_zcta_median <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "median")
 
 # join SES to testing data: positive/100k and testing_ratio
 SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
@@ -1211,7 +1226,7 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
 m2_median <- run_stan(SES_zcta_median_testing, SES_vars_median)
 extract_waic(m2_median$model_output)
 
-SES_zcta_3q <- get_tract_vars_by_zcta(tract_vars, tract_to_modzcta2, "3q")
+SES_zcta_3q <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "3q")
 SES_zcta_3q_testing <- ZCTA_ACS_COVID %>%
   dplyr::select(zcta, pos_per_100000, testing_ratio) %>%
   left_join(SES_zcta_3q, by = c("zcta" = "MODZCTA"))
