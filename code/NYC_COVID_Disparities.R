@@ -630,10 +630,13 @@ tract_vars <- tractSF %>% # uses local CRS
   mutate_at(vars(starts_with("essentialworker_")), ~round((./over16total_industry1)*100, 2))
 
 #### Tract -> ZCTA weighted assignment ####
+# Shares of residential addresses in ZCTAs by Tract are later used to select
+# representative tract-level SES values at a specified location on the ECDF
 
-# prepare tract->zip weights by summing RES_RATIO when multiple ZIPs combine to a single MODZCTA
 modzcta_to_zcta_chr <- data.frame(ZCTA = as.character(modzcta_to_zcta$ZCTA), 
                                   MODZCTA = as.character(modzcta_to_zcta$MODZCTA))
+
+# Calculate the proportion of population each combined ZCTA contributes to MODZCTA
 modzcta_to_zcta_pop <- modzcta_to_zcta_chr %>%
   left_join(ACS_Data1[, c("GEOID", "total_pop1")], by = c("ZCTA" = "GEOID")) %>% 
   group_by(MODZCTA) %>%
@@ -643,6 +646,8 @@ modzcta_to_zcta_pop <- modzcta_to_zcta_chr %>%
   arrange(MODZCTA)
 modzcta_to_zcta_pop
 
+# Sum ZCTA->Tract RES_RATIO weights when multiple ZCTA combine to a single MODZCTA
+# Weights of each ZCTA are scaled by their proportion of MODZCTA population
 modzcta_to_tract <- modzcta_to_zcta_pop %>%
   filter(MODZCTA != "99999") %>% 
   left_join(zip_to_tract, by = c("ZCTA" = "ZIP")) %>%
