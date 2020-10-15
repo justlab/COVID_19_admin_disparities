@@ -892,7 +892,7 @@ if(export.figs) ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.
 
 BWQS_weights <- as.numeric(summary(m1)$summary[(length(vars)-length(SES_vars) + 1):number_of_coefficients,c(1)])
 
-ZCTA_ACS_COVID2 <- X*BWQS_weights[col(ZCTA_ACS_COVID)] 
+ZCTA_ACS_COVID2 <- ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)) * BWQS_weights[col(ZCTA_ACS_COVID)] 
 
 BWQS_index <- ZCTA_ACS_COVID2 %>% 
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
@@ -905,21 +905,22 @@ BWQS_index <- ZCTA_ACS_COVID2 %>%
 # colnames(BWQS_prediction) <- "predicted"
 
 # predictions at the median testing_ratio
+m1K = ns(ZCTA_ACS_COVID$testing_ratio, df = 3)
 BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-   c(predict(K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
-  # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(K$testing_ratio)))
+   c(predict(m1K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
+  # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(m1K$testing_ratio)))
 colnames(BWQS_predicted_infection_median_testing) <- "predicted"
 
 
 BWQS_predicted_infections = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
                                                 (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-                                                (BWQS_params[BWQS_params$label == "delta1", ]$mean * K$testing_ratio))
+                                                (BWQS_params[BWQS_params$label == "delta1", ]$mean * m1K$testing_ratio))
 
 # predictions at the median BWQS index value
 testing_prediction_medianbwqs = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * median(BWQS_index$BWQS_index)) + 
-   K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), 1:3]))
+   m1K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), 1:3]))
 
 # negative binomial model with linear term for testing_ratio (no BWQS)
 nb_testing_linear<-glm.nb(y~ZCTA_ACS_COVID$testing_ratio)
