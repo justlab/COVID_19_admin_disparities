@@ -1191,10 +1191,10 @@ get_tract_vars_by_zcta <- function(tract_vars, modzcta_tract_crosswalk, whichq){
   ses_zcta %>% rename_with(~ gsub("rename", qname, .x))
 }
 
-SES_vars_median = names(SES_zcta_median)[names(SES_zcta_median) != "MODZCTA"]
 
 # get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "q3")
 SES_zcta_median <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "median")
+SES_vars_median = names(SES_zcta_median)[names(SES_zcta_median) != "MODZCTA"]
 
 # join SES to testing data: positive/100k and testing_ratio
 SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
