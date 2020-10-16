@@ -6,6 +6,7 @@ library(tidycensus)
 library(ggExtra)
 library(ggridges)
 library(ggsn)
+library(ragg) # requires packageVersion("StanHeaders") >= '2.21.0.6'
 library(rstan)
 library(drc)
 library(spdep)
@@ -554,8 +555,8 @@ ZCTA_by_boro1 <- ZCTA_by_boro %>%
             tibble(boro = as.character(c("Manhattan", "Manhattan" ,"Queens")), #correcting nas
                      zcta = as.character(c("10069", "10282", "11109"))))
 
-# Supplemental Figure 1 (A - Tests)
-sfig1a <- MODZCTA_NYC_shp1 %>%
+# Figure 3B - Tests
+fig3b <- MODZCTA_NYC_shp1 %>%
   left_join(., May7_tests, by = "zcta") %>%
   left_join(., ACS_Data2, by = "zcta") %>%
   filter(zcta != "99999") %>%
@@ -569,10 +570,11 @@ sfig1a <- MODZCTA_NYC_shp1 %>%
            anchor = c(x = -73.71, y = 40.51)) + 
   labs(fill = "Positives per 100,000") +
   ggtitle("Cumulative Positive COVID tests by zip code (May 7, 2020)") +
-  scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7)) + 
+  scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
   theme_bw(base_size = 6) + 
   theme(legend.title = element_text(face = "bold", size = 6), 
-        panel.background = element_rect(fill = "#dedede"), 
+        panel.background = element_rect(fill = "#ffffff"), 
+        panel.grid = element_line(color = "gray", linetype = "dashed"),
         legend.background = element_rect(fill = "transparent"),
         legend.position = c(0.15, 0.80),
         legend.text = element_text(size = 6),
@@ -580,7 +582,7 @@ sfig1a <- MODZCTA_NYC_shp1 %>%
         legend.key.size = unit(1.1, "lines"),
         axis.title.y = element_blank(),
         axis.title.x = element_blank())
-sfig1a
+fig3b
 
 #### Create data frames of all above information ####
 
@@ -770,7 +772,6 @@ pm(fit_BWQS_model <- function(df, ses_varnames){
     chains = 1,
     warmup = 2500,
     iter = 20000,
-    cores = 1,
     thin = 10,
     refresh = 0,
     algorithm = "NUTS",
@@ -1019,8 +1020,8 @@ ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 # reproject to WGS84 to be compatible with scalebar
 ZCTA_BWQS_COVID_shp <- st_transform(ZCTA_BWQS_COVID_shp, 4326)
 
-# Figure 3
-fig3 <- ggplot(ZCTA_BWQS_COVID_shp) + 
+# Figure 3A - BWQS Index by ZCTA
+fig3a <- ggplot(ZCTA_BWQS_COVID_shp) + 
   geom_sf(aes(fill = BWQS_index), lwd = 0.2) + 
   scalebar(ZCTA_BWQS_COVID_shp, dist = 5, dist_unit = "km", 
            transform = TRUE, model = "WGS84", 
@@ -1030,15 +1031,16 @@ fig3 <- ggplot(ZCTA_BWQS_COVID_shp) +
   theme_bw(base_size = 5) + 
   labs(fill = "BWQS infection risk index") +
   theme(legend.title = element_text(face = "bold", size = 7), 
-        panel.background = element_rect(fill = "#dedede"), 
+        panel.background = element_rect(fill = "#ffffff"), 
         legend.background = element_rect(fill = "transparent"),
-        legend.position = c(0.20, 0.80),
+        panel.grid = element_line(color = "gray", linetype = "dashed"),
+        legend.position = c(0.10, 0.90),
         legend.text = element_text(size = 6),
         legend.key.size = unit(1.1, "lines"),
         axis.title.y = element_blank(),
         axis.title.x = element_blank())
-fig3
-if(export.figs) ggsave(plot = fig3, filename = here("figures", paste0("fig3","_",Sys.Date(),".png")), dpi = 600, device = "png", width = 4, height = 3.7)
+fig3a
+#if(export.figs) ggsave(plot = fig3a, filename = here("figures", paste0("fig3a","_",Sys.Date(),".png")), dpi = 600, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data1 %>% 
@@ -1408,28 +1410,42 @@ ZCTA_BWQS_COVID_shp1 <- ZCTA_ACS_COVID_shp %>%
   mutate(prop_65plus = age65_plus/total_pop1,
          zcta = as.numeric(zcta)) 
 
-# Supplemental Figure 1 (B - Mortality)
-sfig1b <- ZCTA_BWQS_COVID_shp1 %>% 
+# Figure 3C - Mortality
+fig3c <- ZCTA_BWQS_COVID_shp1 %>% 
   ggplot() +
   geom_sf(data = NYC_basemap_shp)+
   geom_sf(aes(fill = COVID_DEATH_RATE), lwd = 0.2)+
   labs(fill = "Mortality per 100,000") +
   ggtitle("Cumulative COVID Mortality by zip code (May 23, 2020)") +
-  scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7)) + 
+  scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
   theme_bw(base_size = 6) + 
   theme(axis.text.y = element_blank(),
         axis.ticks.y = element_blank(),
         legend.title = element_text(face = "bold", size = 6), 
-        panel.background = element_rect(fill = "#dedede"), 
+        panel.background = element_rect(fill = "#ffffff"), 
+        panel.grid = element_line(color = "gray", linetype = "dashed"),
         legend.background = element_rect(fill = "transparent"),
         legend.position = c(0.15, 0.80),
         legend.text = element_text(size = 6),
         legend.key.size = unit(1.1, "lines"),
         plot.margin = unit(c(4,0,4,0), "pt"))
-sfig1b
+fig3c
 
-sfig1 <- ggarrange(sfig1a, sfig1b, nrow = 1)
-if(export.figs) ggexport(sfig1, filename = here("figures", paste0("sfig1", "_", Sys.Date(),".png")), res = 300, width = 7.3*300, height = 3.7*300)
+# sfig1 <- ggarrange(fig3b, sfig1b, nrow = 1)
+# if(export.figs) ggexport(sfig1, filename = here("figures", paste0("sfig1", "_", Sys.Date(),".png")), res = 300, width = 7.3*300, height = 3.7*300)
+
+# Combine subfigures to make Figure 3: maps of BWQS, Tests, and Mortality by ZCTA
+fig3a_2 = fig3a + labs(tag = "A") + theme(plot.tag.position = c(0.0,0.99), plot.tag = element_text(face = "bold", size = 14))
+fig3b_2 = fig3b + labs(tag = "B") + theme(plot.tag.position = c(0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
+fig3c_2 = fig3c + labs(tag = "C") + theme(plot.tag.position = c(-0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
+
+plotres = 300
+agg_png(filename = here("figures", paste0("fig3_combined_2_", Sys.Date(), "_ragg.png")), 
+    width = plotres*4.25, height = plotres*6, scaling = 2)
+grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1), 
+             arrangeGrob(fig3b_2, fig3c_2, ncol = 2, nrow = 1),
+             nrow = 2, ncol = 1, heights = c(1.9,1))
+dev.off()
 
 #Step 2: Run negative binomial model with spatial filtering  
 
