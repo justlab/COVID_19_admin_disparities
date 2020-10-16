@@ -107,7 +107,6 @@ download = function(url, to, f, ...){
 
 ##### Load Data #####
 
-
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
 pm(fst = T,
 get.Pluto <- function() download(
@@ -231,6 +230,11 @@ zip_to_tract <- download(
 
 MODZCTAs_in_NYC <- as.character(unique(ZCTA_test_series$MODZCTA))
 ZCTAs_in_NYC <- as.character(unique(modzcta_to_zcta$ZCTA))
+
+# Remove Nassau county ZCTAs
+ZCTAs_in_NYC <- ZCTAs_in_NYC[!ZCTAs_in_NYC %in% c("11001","11003","11040")]
+modzcta_to_zcta <- modzcta_to_zcta %>% 
+  filter(!ZCTA %in% c("11001","11003","11040"))
 
 ##We have many sources of data, so these just help to combine the various data types
 NYC_counties1 <- c("Bronx","Kings","Queens","New York","Richmond")
@@ -617,7 +621,7 @@ tract_vars <- tractSF %>% # uses local CRS
   left_join(., tract_grocers, by = "GEOID") %>%
   mutate(pop_density = as.numeric(total_pop1/st_area(geometry)),
          avg_hhold_size = round((total_pop1/total_hholds1), 2),
-         res_vol_zctadensity = as.numeric(total_res_volume_tract/st_area(geometry)), 
+         res_vol_tractdensity = as.numeric(total_res_volume_tract/st_area(geometry)), 
          res_vol_popdensity = as.numeric(total_pop1/total_res_volume_tract),
          pubtrans_ferrysubway_commute = pubtrans_subway_commute + pubtrans_ferry_commute,
          grocers = replace_na(grocers, 0),
@@ -630,10 +634,13 @@ tract_vars <- tractSF %>% # uses local CRS
   mutate_at(vars(starts_with("essentialworker_")), ~round((./over16total_industry1)*100, 2))
 
 #### Tract -> ZCTA weighted assignment ####
+# Shares of residential addresses in ZCTAs by Tract are later used to select
+# representative tract-level SES values at a specified location on the ECDF
 
-# prepare tract->zip weights by summing RES_RATIO when multiple ZIPs combine to a single MODZCTA
 modzcta_to_zcta_chr <- data.frame(ZCTA = as.character(modzcta_to_zcta$ZCTA), 
                                   MODZCTA = as.character(modzcta_to_zcta$MODZCTA))
+
+# Calculate the proportion of population each combined ZCTA contributes to MODZCTA
 modzcta_to_zcta_pop <- modzcta_to_zcta_chr %>%
   left_join(ACS_Data1[, c("GEOID", "total_pop1")], by = c("ZCTA" = "GEOID")) %>% 
   group_by(MODZCTA) %>%
@@ -643,8 +650,10 @@ modzcta_to_zcta_pop <- modzcta_to_zcta_chr %>%
   arrange(MODZCTA)
 modzcta_to_zcta_pop
 
+# Sum ZCTA->Tract RES_RATIO weights when multiple ZCTA combine to a single MODZCTA
 modzcta_to_tract <- modzcta_to_zcta_pop %>%
   filter(MODZCTA != "99999") %>% 
+  # Weights of each ZCTA are scaled by their proportion of MODZCTA population
   left_join(zip_to_tract, by = c("ZCTA" = "ZIP")) %>%
   mutate(scaled_res_ratio = RES_RATIO * pop_prop) %>% 
   # note: MODZCTA 10001 & 10007 contain a ZCTA with a small share of population
@@ -652,31 +661,38 @@ modzcta_to_tract <- modzcta_to_zcta_pop %>%
   # MODZCTA less than 1, but this will not effect the weighted median or 3Q values
   # by tract.
   group_by(MODZCTA, TRACT) %>%
-  dplyr::summarize(SUM_RES_RATIO = sum(scaled_res_ratio), .groups = "drop") 
+  dplyr::summarize(SUM_RES_RATIO = sum(scaled_res_ratio), .groups = "drop") %>%
+  # Weights are then multiplied by the population density of each tract
+  left_join(tract_vars, by = c("TRACT" = "GEOID")) %>%
+  dplyr::select(MODZCTA, TRACT, SUM_RES_RATIO, total_pop1, total_hholds1) %>%
+  mutate(tract_popdens = total_pop1/total_hholds1) %>% 
+  mutate(W_RES_RATIO = SUM_RES_RATIO * tract_popdens) %>%
+  dplyr::select(MODZCTA, TRACT, W_RES_RATIO)
 modzcta_to_tract
 
+# Remove 64 MODZCTA->Tract ratios for having zero tract households, and
+# remove  9 MODZCTA->Tract ratios for being to tracts outside of NYC. 
+# All 73 have NA values for W_RES_RATIO
+modzcta_to_tract <- modzcta_to_tract %>% 
+  filter(!is.na(W_RES_RATIO))
+
 # length(unique(modzcta_to_tract$MODZCTA)) #  177
-# length(unique(modzcta_to_tract$TRACT))   # 2188
+# length(unique(modzcta_to_tract$TRACT))   # 2117
 # length(unique(tractSF$GEOID))            # 2167
 
 # check res_ratio against tracts with no population
 tract_modzcta_pop <- modzcta_to_tract %>%
   left_join(acs_tracts2, by = c("TRACT" = "GEOID")) %>%
-  dplyr::select(MODZCTA, TRACT, total_pop1, SUM_RES_RATIO)
+  dplyr::select(MODZCTA, TRACT, total_pop1, W_RES_RATIO)
 
 # checking for tracts with no population but res_ratio > 0
-tract_modzcta_pop %>% filter(MODZCTA == "11697") # still has a zero pop tract with res_ratio > 0
-tract_modzcta_pop %>% filter(total_pop1 == 0 & SUM_RES_RATIO > 0) %>% nrow() # 30
-# set tracts with no population to have a res_ratio of 0
-tract_modzcta_pop2 <- tract_modzcta_pop %>% 
-  mutate(SUM_RES_RATIO = case_when(
-    total_pop1 == 0 & SUM_RES_RATIO > 0 ~ 0,
-    TRUE                                ~ SUM_RES_RATIO ))
+tract_modzcta_pop %>% filter(MODZCTA == "11697") # zero pop tract no longer has res_ratio > 0
+tract_modzcta_pop %>% filter(total_pop1 == 0 & W_RES_RATIO > 0) %>% nrow() # 0
 
 # check to make sure no MODZCTA have all zeroes for all tract res_ratios
-tract_modzcta_pop2 %>% group_by(MODZCTA) %>% filter(all(SUM_RES_RATIO == 0)) %>% nrow() # 0
-tract_modzcta_pop2 %>% filter(MODZCTA == "10020") # this MODZCTA doesn't exist, but the ZIP did and had all zeroes for RES_RATIO by tract
-modzcta_to_tract2 <- dplyr::select(tract_modzcta_pop2, -total_pop1)
+tract_modzcta_pop %>% group_by(MODZCTA) %>% filter(all(W_RES_RATIO == 0)) %>% nrow() # 0
+tract_modzcta_pop %>% filter(MODZCTA == "10020") # this MODZCTA doesn't exist, but the ZIP did and had all zeroes for RES_RATIO by tract
+modzcta_to_tract2 <- dplyr::select(tract_modzcta_pop, -total_pop1)
 
 ### Cleaning done --- Now for the Analysis ###
 
@@ -877,7 +893,7 @@ if(export.figs) ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.
 
 BWQS_weights <- as.numeric(summary(m1)$summary[(length(vars)-length(SES_vars) + 1):number_of_coefficients,c(1)])
 
-ZCTA_ACS_COVID2 <- X*BWQS_weights[col(ZCTA_ACS_COVID)] 
+ZCTA_ACS_COVID2 <- ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)) * BWQS_weights[col(ZCTA_ACS_COVID)] 
 
 BWQS_index <- ZCTA_ACS_COVID2 %>% 
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
@@ -890,21 +906,22 @@ BWQS_index <- ZCTA_ACS_COVID2 %>%
 # colnames(BWQS_prediction) <- "predicted"
 
 # predictions at the median testing_ratio
+m1K = ns(ZCTA_ACS_COVID$testing_ratio, df = 3)
 BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-   c(predict(K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
-  # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(K$testing_ratio)))
+   c(predict(m1K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
+  # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(m1K$testing_ratio)))
 colnames(BWQS_predicted_infection_median_testing) <- "predicted"
 
 
 BWQS_predicted_infections = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
                                                 (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-                                                (BWQS_params[BWQS_params$label == "delta1", ]$mean * K$testing_ratio))
+                                                (BWQS_params[BWQS_params$label == "delta1", ]$mean * m1K$testing_ratio))
 
 # predictions at the median BWQS index value
 testing_prediction_medianbwqs = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * median(BWQS_index$BWQS_index)) + 
-   K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), 1:3]))
+   m1K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), 1:3]))
 
 # negative binomial model with linear term for testing_ratio (no BWQS)
 nb_testing_linear<-glm.nb(y~ZCTA_ACS_COVID$testing_ratio)
@@ -1143,7 +1160,8 @@ sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
 sfig2
 if(export.figs) ggsave(sfig2, filename = here("figures", paste0("sfig2","_",Sys.Date(),".png")), device = "png", dpi = 500, width = 12, height = 6)
 
-### Now look at BWQS by Tract ###
+#### BWQS by Tract ####
+
 get_tract_vars_by_zcta <- function(tract_vars, modzcta_tract_crosswalk, whichq){
   whichq = str_to_lower(whichq)
   if(whichq %in% c("median", "q2", "2q", "2")){
@@ -1159,24 +1177,24 @@ get_tract_vars_by_zcta <- function(tract_vars, modzcta_tract_crosswalk, whichq){
     left_join(., modzcta_tract_crosswalk, by = c("GEOID" = "TRACT")) %>% 
     filter(!is.na(MODZCTA)) %>% 
     group_by(MODZCTA) %>%
-    summarise(essentialworker_drove_rename = Hmisc::wtd.quantile(essentialworker_drove, SUM_RES_RATIO)[[qnum]],
-              essentialworker_pubtrans_rename = Hmisc::wtd.quantile(essentialworker_pubtrans, SUM_RES_RATIO)[[qnum]],
-              not_quarantined_jobs_rename = Hmisc::wtd.quantile(not_quarantined_jobs, SUM_RES_RATIO)[[qnum]],
-              didnot_workhome_commute_rename = Hmisc::wtd.quantile(didnot_workhome_commute, SUM_RES_RATIO)[[qnum]],
-              not_insured_rename = Hmisc::wtd.quantile(not_insured, SUM_RES_RATIO)[[qnum]],
-              one_over_medincome_rename = Hmisc::wtd.quantile(one_over_medincome, SUM_RES_RATIO)[[qnum]],
-              unemployed_rename = Hmisc::wtd.quantile(unemployed, SUM_RES_RATIO)[[qnum]],
-              avg_hhold_size_rename = Hmisc::wtd.quantile(avg_hhold_size, SUM_RES_RATIO)[[qnum]],
-              res_vol_popdensity_rename = Hmisc::wtd.quantile(res_vol_popdensity, SUM_RES_RATIO)[[qnum]],
-              one_over_grocers_per_1000_rename = Hmisc::wtd.quantile(one_over_grocers_per_1000, SUM_RES_RATIO)[[qnum]]) 
+    summarise(essentialworker_drove_rename = Hmisc::wtd.quantile(essentialworker_drove, W_RES_RATIO)[[qnum]],
+              essentialworker_pubtrans_rename = Hmisc::wtd.quantile(essentialworker_pubtrans, W_RES_RATIO)[[qnum]],
+              not_quarantined_jobs_rename = Hmisc::wtd.quantile(not_quarantined_jobs, W_RES_RATIO)[[qnum]],
+              didnot_workhome_commute_rename = Hmisc::wtd.quantile(didnot_workhome_commute, W_RES_RATIO)[[qnum]],
+              not_insured_rename = Hmisc::wtd.quantile(not_insured, W_RES_RATIO)[[qnum]],
+              one_over_medincome_rename = Hmisc::wtd.quantile(one_over_medincome, W_RES_RATIO)[[qnum]],
+              unemployed_rename = Hmisc::wtd.quantile(unemployed, W_RES_RATIO)[[qnum]],
+              avg_hhold_size_rename = Hmisc::wtd.quantile(avg_hhold_size, W_RES_RATIO)[[qnum]],
+              res_vol_popdensity_rename = Hmisc::wtd.quantile(res_vol_popdensity, W_RES_RATIO)[[qnum]],
+              one_over_grocers_per_1000_rename = Hmisc::wtd.quantile(one_over_grocers_per_1000, W_RES_RATIO)[[qnum]]) 
   
   ses_zcta %>% rename_with(~ gsub("rename", qname, .x))
 }
 
-SES_vars_median = names(SES_zcta_median)[names(SES_zcta_median) != "MODZCTA"]
 
 # get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "q3")
 SES_zcta_median <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "median")
+SES_vars_median = names(SES_zcta_median)[names(SES_zcta_median) != "MODZCTA"]
 
 # join SES to testing data: positive/100k and testing_ratio
 SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
