@@ -819,7 +819,8 @@ Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMedians(extract(m1
 
 ggplot(data = Residuals) + geom_sf(aes(fill = std_residual)) +
   scale_fill_gradient2(midpoint = 0, high = "green", mid = "white", low = "red")
-
+summary(glm.nb(pos_per_100000 ~ testing_ratio, data = ZCTA_ACS_COVID))
+summary(glm.nb(pos_per_100000 ~ medincome, data = ZCTA_ACS_COVID))
 # 
 # m1 = stan.model()
 # detach("package:raster", unload = TRUE) # may be needed
@@ -998,7 +999,6 @@ if(export.figs) {
   print(BWQS_scatter)
   dev.off()
 }
-
 
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
@@ -1485,8 +1485,9 @@ BWQS_fits %>%
   mutate(rank_pca = rank(value)) %>%
   dplyr::select(2, 3, 5, 1, 4)
 
-glm_princomp <- glm.nb(pos_per_100000 ~ PC1 + testing_ratio, data = df_for_PCA_analysis)
-exp(confint(glm.nb(pos_per_100000 ~ PC1 + testing_ratio, data = df_for_PCA_analysis)))
+glm_princomp <- glm.nb(pos_per_100000 ~ PC1 + ns(testing_ratio, df = 3), data = df_for_PCA_analysis)
+summary(glm_princomp)
+exp(confint(glm.nb(pos_per_100000 ~ PC1 + ns(testing_ratio, df = 3), data = df_for_PCA_analysis)))
 
 enframe(predict(glm_princomp)) %>% mutate(glm_princomp = exp(value)) %>% dplyr::select(glm_princomp)
 enframe(predict(glm_insurance_and_income)) %>% mutate(glm_ins_and_income = exp(value)) %>% dplyr::select(glm_ins_and_income)
