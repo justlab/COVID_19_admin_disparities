@@ -665,19 +665,14 @@ modzcta_to_tract <- modzcta_to_zcta_pop %>%
   # Weights are then multiplied by the population density of each tract
   left_join(tract_vars, by = c("TRACT" = "GEOID")) %>%
   dplyr::select(MODZCTA, TRACT, SUM_RES_RATIO, total_pop1, total_hholds1) %>%
+  filter(total_hholds1 > 0) %>% 
   mutate(tract_popdens = total_pop1/total_hholds1) %>% 
   mutate(W_RES_RATIO = SUM_RES_RATIO * tract_popdens) %>%
   dplyr::select(MODZCTA, TRACT, W_RES_RATIO)
 modzcta_to_tract
 
-# Remove 64 MODZCTA->Tract ratios for having zero tract households, and
-# remove  9 MODZCTA->Tract ratios for being to tracts outside of NYC. 
-# All 73 have NA values for W_RES_RATIO
-modzcta_to_tract <- modzcta_to_tract %>% 
-  filter(!is.na(W_RES_RATIO))
-
 # length(unique(modzcta_to_tract$MODZCTA)) #  177
-# length(unique(modzcta_to_tract$TRACT))   # 2117
+# length(unique(modzcta_to_tract$TRACT))   # 2111
 # length(unique(tractSF$GEOID))            # 2167
 
 # check res_ratio against tracts with no population
