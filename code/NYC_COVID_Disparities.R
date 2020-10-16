@@ -749,10 +749,10 @@ bind_cols(Variables = SES_vars,
   dplyr::select(-V1...2, -V1...3) 
 
 #Step 3: Prepare data for BWQS and pass to stan for model fitting 
-pm(fit_BWQS_model <- function(df){
+pm(fit_BWQS_model <- function(df, ses_varnames){
   y = as.numeric(df$pos_per_100000)
   X <- df %>%
-    dplyr::select(all_of(SES_vars))
+    dplyr::select(all_of(ses_varnames))
   K <- ns(df$testing_ratio, df = 3)
   for (vname in SES_vars)
     X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10
@@ -824,7 +824,7 @@ Compute_Bayes_R2 <- function(fit) {
      #                     thin = 10, refresh = 0, algorithm = "NUTS",
      #                     seed = 1234, control = list(max_treedepth = 20,
      #                                                 adapt_delta = 0.999999999999999))#)
-m1 <- fit_BWQS_model(ZCTA_ACS_COVID)
+m1 <- fit_BWQS_model(ZCTA_ACS_COVID, SES_vars)
 extract_waic(m1)
 Compute_Bayes_R2(m1)$meanr2
 colMedians(extract(m1,"y_new")$y_new)
@@ -1241,7 +1241,7 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
 #     list(model_output = model_output, quantiled_vars = X)
 #   })
 
-m2_median <- run_stan(SES_zcta_median_testing, SES_vars_median)
+m2_median <- fit_BWQS_model(SES_zcta_median_testing, SES_vars_median)
 extract_waic(m2_median$model_output)
 
 SES_zcta_3q <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "3q")
