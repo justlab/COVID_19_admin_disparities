@@ -749,7 +749,7 @@ pm(fit_BWQS_model <- function(df, ses_varnames){
   X <- df %>%
     dplyr::select(all_of(ses_varnames))
   K <- ns(df$testing_ratio, df = 3)
-  for (vname in SES_vars)
+  for (vname in ses_varnames)
     X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10
   data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
   
