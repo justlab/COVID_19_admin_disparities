@@ -791,39 +791,15 @@ Compute_Bayes_R2 <- function(fit) {
   return(list(meanr2 = mean(r2),
               medianr2 = median(r2)))
 }
-# # 
-# y = as.numeric(ZCTA_ACS_COVID$pos_per_100000)
-# X <- ZCTA_ACS_COVID %>%
-#   dplyr::select(all_of(SES_vars))
-# K <- ns(ZCTA_ACS_COVID$testing_ratio, df = 3)
-# for (vname in SES_vars)
-#     X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10
-# data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
 
-# "NB_BWQS_prediction.stan"
-# The code is very similar to the old one
-# but we have the new set of parameter
-
-
- # data_list = list(N  = NROW(data),
- #                  C  = NCOL(X),
- #                  K  = NCOL(K),
- #                  XC = cbind(as.matrix(X)),
- #                  XK = cbind(K),
- #                  Dalp = rep(1,length(SES_vars)),
- #                  y = as.vector(data$y))
-
-     # m2 <- stan(file = BWQS_stan_model,
-     #                     data = data_list, chains = 1,
-     #                     warmup = 2500, iter = 20000, cores = 1,
-     #                     thin = 10, refresh = 0, algorithm = "NUTS",
-     #                     seed = 1234, control = list(max_treedepth = 20,
-     #                                                 adapt_delta = 0.999999999999999))#)
 m1 <- fit_BWQS_model(ZCTA_ACS_COVID, SES_vars)
 extract_waic(m1)
 Compute_Bayes_R2(m1)$meanr2
 colMedians(extract(m1,"y_new")$y_new)
 colMeans(extract(m1,"y_new")$y_new)
+sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m1,"y_new")$y_new))^2))
+cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m1,"y_new")$y_new), method = "kendall")
+
 Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMedians(extract(m1,"y_new")$y_new)) %>%
   dplyr::select(pos_per_100000,Prediction, geometry) %>%
   mutate(std_residual = (pos_per_100000-Prediction)/sd(pos_per_100000-Prediction))
@@ -832,7 +808,7 @@ ggplot(data = Residuals) + geom_sf(aes(fill = std_residual)) +
   scale_fill_gradient2(midpoint = 0, high = "green", mid = "white", low = "red")
 summary(glm.nb(pos_per_100000 ~ testing_ratio, data = ZCTA_ACS_COVID))
 summary(glm.nb(pos_per_100000 ~ medincome, data = ZCTA_ACS_COVID))
-# 
+
 # m1 = stan.model()
 # detach("package:raster", unload = TRUE) # may be needed
 
@@ -907,7 +883,7 @@ BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "
    c(predict(m1K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
   # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(m1K$testing_ratio)))
 colnames(BWQS_predicted_infection_median_testing) <- "predicted"
-
+extract_waic()
 
 BWQS_predicted_infections = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
                                                 (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
@@ -1186,7 +1162,6 @@ get_tract_vars_by_zcta <- function(tract_vars, modzcta_tract_crosswalk, whichq){
   ses_zcta %>% rename_with(~ gsub("rename", qname, .x))
 }
 
-
 # get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "q3")
 SES_zcta_median <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "median")
 SES_vars_median = names(SES_zcta_median)[names(SES_zcta_median) != "MODZCTA"]
@@ -1238,6 +1213,9 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
 
 m2_median <- fit_BWQS_model(SES_zcta_median_testing, SES_vars_median)
 extract_waic(m2_median)
+Compute_Bayes_R2(m2_median)
+sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m2_median,"y_new")$y_new))^2))
+cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m2_median,"y_new")$y_new), method = "kendall")
 
 SES_zcta_3q <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "3q")
 SES_vars_3q = names(SES_zcta_3q)[names(SES_zcta_3q) != "MODZCTA"]
@@ -1247,6 +1225,9 @@ SES_zcta_3q_testing <- ZCTA_ACS_COVID %>%
 
 m2_3q <- fit_BWQS_model(SES_zcta_3q_testing, SES_vars_3q)
 extract_waic(m2_3q)
+Compute_Bayes_R2(m2_3q)
+sqrt(mean((SES_zcta_3q_testing$pos_per_100000 - colMedians(extract(m2_3q,"y_new")$y_new))^2))
+cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m2_3q,"y_new")$y_new), method = "kendall")
 
 #### Step 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
 
