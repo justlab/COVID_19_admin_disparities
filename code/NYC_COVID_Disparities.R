@@ -29,7 +29,8 @@ library(httr)
 library(jsonlite)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
-
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
 
 #### SESSION CONFIGURATIONS ####
 
@@ -746,7 +747,34 @@ bind_cols(Variables = SES_vars,
   dplyr::select(-V1...2, -V1...3) 
 
 #Step 3: Prepare data for BWQS and pass to stan for model fitting 
-pm(fit_BWQS_model <- function(df, ses_varnames){
+pm(fit_BWQS_model <- function(data_list, stan_model_path){
+  fitted_model <- stan(
+    file = stan_model_path,
+    data = data_list,
+    chains = 1,
+    warmup = 2500,
+    iter = 20000,
+    thin = 10,
+    refresh = 0,
+    algorithm = "NUTS",
+    seed = 1234,
+    control = list(max_treedepth = 20,
+                   adapt_delta = 0.999999999999999))
+  return(fitted_model)
+})
+
+Compute_Bayes_R2 <- function(fit) {
+  y_pred = exp(extract(fit,"eta")$eta)
+  var_fit = apply(y_pred, 1, var)
+  mean_fit = apply(y_pred, 1, mean)
+  phi = extract(fit,"phi")$phi
+  var_res = mean_fit  + (mean_fit^2)/phi
+  r2 = var_fit / (var_fit + var_res)
+  return(list(meanr2 = mean(r2),
+              medianr2 = median(r2)))
+}
+
+prep_BWQS_data <- function(df, ses_varnames){
   y = as.numeric(df$pos_per_100000)
   X <- df %>%
     dplyr::select(all_of(ses_varnames))
@@ -765,62 +793,11 @@ pm(fit_BWQS_model <- function(df, ses_varnames){
                    XK_new = cbind(K),
                    Dalp   = rep(1,length(SES_vars)),
                    y      = as.vector(data$y))
-  
-  fitted_model <- stan(
-    file = BWQS_stan_model,
-    data = data_list,
-    chains = 1,
-    warmup = 2500,
-    iter = 20000,
-    thin = 10,
-    refresh = 0,
-    algorithm = "NUTS",
-    seed = 1234,
-    control = list(max_treedepth = 20,
-                   adapt_delta = 0.999999999999999))
-  
-  return(fitted_model)
-})
-
-Compute_Bayes_R2 <- function(fit) {
-  y_pred = exp(extract(fit,"eta")$eta)
-  var_fit = apply(y_pred, 1, var)
-  mean_fit = apply(y_pred, 1, mean)
-  phi = extract(fit,"phi")$phi
-  var_res = mean_fit  + (mean_fit^2)/phi
-  r2 = var_fit / (var_fit + var_res)
-  return(list(meanr2 = mean(r2),
-              medianr2 = median(r2)))
+  return(list(data_list = data_list, X = X, K = K))
 }
-# # 
-# y = as.numeric(ZCTA_ACS_COVID$pos_per_100000)
-# X <- ZCTA_ACS_COVID %>%
-#   dplyr::select(all_of(SES_vars))
-# K <- ns(ZCTA_ACS_COVID$testing_ratio, df = 3)
-# for (vname in SES_vars)
-#     X[[vname]] <- ecdf(X[[vname]])(X[[vname]]) * 10
-# data <-as.data.frame(cbind(y,X)) # Aggregate data in a data.frame
 
-# "NB_BWQS_prediction.stan"
-# The code is very similar to the old one
-# but we have the new set of parameter
-
-
- # data_list = list(N  = NROW(data),
- #                  C  = NCOL(X),
- #                  K  = NCOL(K),
- #                  XC = cbind(as.matrix(X)),
- #                  XK = cbind(K),
- #                  Dalp = rep(1,length(SES_vars)),
- #                  y = as.vector(data$y))
-
-     # m2 <- stan(file = BWQS_stan_model,
-     #                     data = data_list, chains = 1,
-     #                     warmup = 2500, iter = 20000, cores = 1,
-     #                     thin = 10, refresh = 0, algorithm = "NUTS",
-     #                     seed = 1234, control = list(max_treedepth = 20,
-     #                                                 adapt_delta = 0.999999999999999))#)
-m1 <- fit_BWQS_model(ZCTA_ACS_COVID, SES_vars)
+m1data <- prep_BWQS_data(ZCTA_ACS_COVID, SES_vars)
+m1 <- fit_BWQS_model(m1data$data_list, BWQS_stan_model)
 extract_waic(m1)
 Compute_Bayes_R2(m1)$meanr2
 colMedians(extract(m1,"y_new")$y_new)
@@ -831,11 +808,6 @@ Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMedians(extract(m1
 
 ggplot(data = Residuals) + geom_sf(aes(fill = std_residual)) +
   scale_fill_gradient2(midpoint = 0, high = "green", mid = "white", low = "red")
-
-# 
-# m1 = stan.model()
-# detach("package:raster", unload = TRUE) # may be needed
-
 
 vars = c("phi", "beta0", "beta1", paste0("delta", 1:3), SES_vars)
 parameters_to_drop <- c("phi", paste0("delta", 1:3), "beta0", "beta1")
@@ -888,7 +860,7 @@ if(export.figs) ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.
 
 BWQS_weights <- as.numeric(summary(m1)$summary[(length(vars)-length(SES_vars) + 1):number_of_coefficients,c(1)])
 
-ZCTA_ACS_COVID2 <- ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)) * BWQS_weights[col(ZCTA_ACS_COVID)] 
+ZCTA_ACS_COVID2 <- m1data$X * BWQS_weights[col(ZCTA_ACS_COVID)] 
 
 BWQS_index <- ZCTA_ACS_COVID2 %>% 
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
@@ -901,35 +873,34 @@ BWQS_index <- ZCTA_ACS_COVID2 %>%
 # colnames(BWQS_prediction) <- "predicted"
 
 # predictions at the median testing_ratio
-m1K = ns(ZCTA_ACS_COVID$testing_ratio, df = 3)
 BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-   c(predict(m1K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
-  # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(m1K$testing_ratio)))
+   c(predict(m1data$K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
+  # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(m1data$K$testing_ratio)))
 colnames(BWQS_predicted_infection_median_testing) <- "predicted"
 
-
 BWQS_predicted_infections = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
-                                                (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-                                                (BWQS_params[BWQS_params$label == "delta1", ]$mean * m1K$testing_ratio))
+  (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
+  m1data$K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), "mean"]))
+colnames(BWQS_predicted_infections) <- "predicted"
 
 # predictions at the median BWQS index value
 testing_prediction_medianbwqs = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * median(BWQS_index$BWQS_index)) + 
-   m1K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), 1:3]))
+   m1data$K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), 1:3]))
 
 # negative binomial model with linear term for testing_ratio (no BWQS)
-nb_testing_linear<-glm.nb(y~ZCTA_ACS_COVID$testing_ratio)
-mean(abs(y - exp(predict(nb_testing_linear)))) # MAE
-sqrt(mean((y - exp(predict(nb_testing_linear)))^2)) # RMSE
+nb_testing_linear<-glm.nb(m1data$data_list$y~ZCTA_ACS_COVID$testing_ratio)
+mean(abs(m1data$data_list$y - exp(predict(nb_testing_linear)))) # MAE
+sqrt(mean((m1data$data_list$y - exp(predict(nb_testing_linear)))^2)) # RMSE
 # negative binomial with spline for testing_ratio (no BWQS)
-nb_testing_ns3df<-glm.nb(y~ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
-mean(abs(y - exp(predict(nb_testing_ns3df)))) # MAE
-sqrt(mean((y - exp(predict(nb_testing_ns3df)))^2)) # RMSE
+nb_testing_ns3df<-glm.nb(m1data$data_list$y~m1data$K)
+mean(abs(m1data$data_list$y - exp(predict(nb_testing_ns3df)))) # MAE
+sqrt(mean((m1data$data_list$y - exp(predict(nb_testing_ns3df)))^2)) # RMSE
 
 # mean absolute error of predictions from our full model
-mean(abs(y - BWQS_prediction$predicted)) # MAE
-sqrt(mean((y - BWQS_prediction$predicted)^2)) # RMSE
+mean(abs(m1data$data_list$y - BWQS_predicted_infections$predicted)) # MAE
+sqrt(mean((m1data$data_list$y - BWQS_predicted_infections$predicted)^2)) # RMSE
 
 # Visualize the relationship between BWQS and test_ratio
 ggplot(data.frame(BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, BWQS_index)) + geom_point() + 
@@ -946,19 +917,19 @@ cor.test(BWQS_index$BWQS_index, ZCTA_ACS_COVID$testing_ratio, method = "spearman
 #   geom_smooth(method = "glm.nb", formula = y ~ splines::ns(x, 3), se = FALSE)
 
 # Partial regression plot for BWQS index
-nb_testing_ns3df <- glm.nb(y ~ ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+nb_testing_ns3df <- glm.nb(m1data$data_list$y ~ m1data$K)
 yresid <- resid(nb_testing_ns3df)
-bwqs_testing_ns3df <- lm(BWQS_index$BWQS_index ~ ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+bwqs_testing_ns3df <- lm(BWQS_index$BWQS_index ~ m1data$K)
 bwqsresid <- resid(bwqs_testing_ns3df)
 ggplot(data.frame(yresid, bwqsresid), aes(bwqsresid, yresid)) + geom_point() + 
-  geom_smooth(formula = y ~ x, method = "lm", se = F) + 
+  geom_smooth(formula = m1data$data_list$y ~ x, method = "lm", se = F) + 
   ylab("residual log infection rate\n(adjusted for testing)") + xlab("residual BWQS infection risk index\n(adjusted for testing)")
 summary(lm(yresid ~ bwqsresid))
 
 # change in residuals adding in BWQS
-nb_testing_ns3df <- glm.nb(y ~ ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+nb_testing_ns3df <- glm.nb(m1data$data_list$y ~ m1data$K)
 yresid <- resid(nb_testing_ns3df)
-nb_testing_ns3df_bwqs <- glm.nb(y ~ BWQS_index$BWQS_index + ns(ZCTA_ACS_COVID$testing_ratio, df = 3))
+nb_testing_ns3df_bwqs <- glm.nb(m1data$data_list$y ~ BWQS_index$BWQS_index + m1data$K)
 yresid_full <- resid(nb_testing_ns3df_bwqs)
 ggplot(data.frame(yresid, yresid_full), aes(yresid, yresid_full)) + geom_point() + 
   scale_y_continuous(breaks = -4:3) + 
@@ -966,24 +937,24 @@ ggplot(data.frame(yresid, yresid_full), aes(yresid, yresid_full)) + geom_point()
   theme(aspect.ratio=1)
 
 # Visualize the full model observed vs predicted
-ggplot(data.frame(pred = BWQS_prediction$predicted, y), aes(pred, y)) + 
+ggplot(data.frame(pred = BWQS_predicted_infections$predicted, m1data$data_list$y), aes(pred, m1data$data_list$y)) + 
   geom_point() +  
   geom_abline(linetype = "dashed", color = "grey10") + 
   coord_fixed() + 
   theme(aspect.ratio=1)
 
 # partial residual plot
-preddf <- data.frame(y, BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_COVID$testing_ratio, pred = BWQS_prediction$predicted)
+preddf <- data.frame(y = m1data$data_list$y, BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_COVID$testing_ratio, pred = BWQS_predicted_infections$predicted)
 preddf$partialbwqs <- log(preddf$y) - log(preddf$pred) + (BWQS_params[BWQS_params$label == "beta1", ]$mean * preddf$BWQS_index)
 ggplot(preddf, aes(BWQS_index, partialbwqs)) + geom_point() + geom_smooth(se = F) + geom_smooth(method = "lm", color = "red")
-partialresid <- residuals(glm.nb(y ~ BWQS_index + ns(testing_ratio, df = 3), data = preddf), "partial")
+partialresid <- residuals(glm.nb(m1data$data_list$y ~ BWQS_index + ns(testing_ratio, df = 3), data = preddf), "partial")
 colnames(partialresid) <- c("residpartialbwqs", "residpartialnstesting")
 ggplot(data.frame(preddf, partialresid), aes(BWQS_index, residpartialbwqs)) + geom_point() + geom_smooth() + geom_smooth(method = "lm", color = "red")
 summary(lm(residpartialbwqs ~ BWQS_index, data = data.frame(preddf, partialresid)))
-ggplot(preddf, aes(BWQS_index, y-pred)) + geom_point() + geom_smooth(se = F) + geom_smooth(method = "lm", color = "red")
+ggplot(preddf, aes(BWQS_index, m1data$data_list$y-pred)) + geom_point() + geom_smooth(se = F) + geom_smooth(method = "lm", color = "red")
 
 # Visualize the relationship between BWQS index and infection rate at the median testing_ratio
-BWQS_scatter <- ggplot(data.frame(BWQS_index, y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
+BWQS_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
   geom_line(aes(y = predicted)) + 
   scale_x_continuous("BWQS infection risk index") + 
   scale_y_continuous("Infections per 100,000", label=comma)
@@ -996,8 +967,8 @@ if(export.figs) {
 }
 
 # Visualize the relationship between testing_ratio and infection rate at the median BWQS
-testing_scatter <- ggplot(data.frame(BWQS_index, y, testing_predicted_infection_median_BWQS = testing_prediction_medianbwqs, testing_ratio = ZCTA_ACS_COVID$testing_ratio), 
-                          aes(testing_ratio, y)) + 
+testing_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, testing_predicted_infection_median_BWQS = testing_prediction_medianbwqs, testing_ratio = ZCTA_ACS_COVID$testing_ratio), 
+                          aes(testing_ratio, m1data$data_list$y)) + 
   geom_ribbon(aes(ymin = testing_predicted_infection_median_BWQS.2.5., ymax = testing_predicted_infection_median_BWQS.97.5.), alpha = 0.2) + 
   geom_line(aes(y = testing_predicted_infection_median_BWQS.mean)) + 
   geom_point() + 
