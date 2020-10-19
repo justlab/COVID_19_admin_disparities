@@ -983,6 +983,8 @@ if(export.figs) {
   dev.off()
 }
 
+# residual analysis with DHARMa
+dharm <- createDHARMa(simulatedResponse = t(extract(m1,"y_new")$y_new), observedResponse = m1data$data_list$y)
 
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
