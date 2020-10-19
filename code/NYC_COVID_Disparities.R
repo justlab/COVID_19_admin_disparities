@@ -1209,7 +1209,8 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
 #     list(model_output = model_output, quantiled_vars = X)
 #   })
 
-m2_median <- fit_BWQS_model(SES_zcta_median_testing, SES_vars_median)
+m2data_median <- prep_BWQS_data(SES_zcta_median_testing, SES_vars_median)
+m2_median <- fit_BWQS_model(data_list = m2data_median$data_list, stan_model_path = BWQS_stan_model)
 extract_waic(m2_median)
 
 SES_zcta_3q <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "3q")
@@ -1218,7 +1219,8 @@ SES_zcta_3q_testing <- ZCTA_ACS_COVID %>%
   dplyr::select(zcta, pos_per_100000, testing_ratio) %>%
   left_join(SES_zcta_3q, by = c("zcta" = "MODZCTA"))
 
-m2_3q <- fit_BWQS_model(SES_zcta_3q_testing, SES_vars_3q)
+m2data_3q <- prep_BWQS_data(SES_zcta_3q_testing, SES_vars_3q)
+m2_3q <- fit_BWQS_model(data_list = m2data_3q$data_list, stan_model_path = BWQS_stan_model)
 extract_waic(m2_3q)
 
 #### Step 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
