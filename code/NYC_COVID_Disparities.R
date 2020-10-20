@@ -805,10 +805,12 @@ extract_waic(m1)
 Compute_Bayes_R2(m1)$meanr2
 colMedians(extract(m1,"y_new")$y_new)
 colMeans(extract(m1,"y_new")$y_new)
+
 sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m1,"y_new")$y_new))^2))
 cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m1,"y_new")$y_new), method = "kendall")
 
-Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMedians(extract(m1,"y_new")$y_new)) %>%
+
+Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMeans(extract(m1,"y_new")$y_new)) %>%
   dplyr::select(pos_per_100000,Prediction, geometry) %>%
   mutate(std_residual = (pos_per_100000-Prediction)/sd(pos_per_100000-Prediction))
 
@@ -901,7 +903,7 @@ colnames(BWQS_predicted_infections) <- "predicted"
 # predictions at the median BWQS index value
 testing_prediction_medianbwqs = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * median(BWQS_index$BWQS_index)) + 
-   m1data$K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), 1:3]))
+   m1data$K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), "mean"]))
 
 # negative binomial model with linear term for testing_ratio (no BWQS)
 nb_testing_linear<-glm.nb(m1data$data_list$y~ZCTA_ACS_COVID$testing_ratio)
@@ -996,6 +998,9 @@ if(export.figs) {
   print(BWQS_scatter)
   dev.off()
 }
+
+# residual analysis with DHARMa
+dharm <- createDHARMa(simulatedResponse = t(extract(m1,"y_new")$y_new), observedResponse = m1data$data_list$y)
 
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
