@@ -887,23 +887,28 @@ BWQS_index <- ZCTA_ACS_COVID2 %>%
 #    K %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)])
 # colnames(BWQS_prediction) <- "predicted"
 
-# predictions at the median testing_ratio
-BWQS_predicted_infection_median_testing = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
-  (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
-   c(predict(m1data$K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)]))
-  # (BWQS_params[BWQS_params$label == "delta1", ]$mean * median(m1data$K$testing_ratio)))
-colnames(BWQS_predicted_infection_median_testing) <- "predicted"
-
+# calculate predictions at the median testing_ratio
+BWQS_predicted_terms = BWQS_params[BWQS_params$label == "beta0", ]$mean + 
+   c(predict(m1data$K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)])
+BWQS_pred_median_testing <- data.frame(mean = exp(BWQS_predicted_terms + 
+                                                    BWQS_params[BWQS_params$label == "beta1",]$mean * BWQS_index$BWQS_index),
+                                       lower = exp(BWQS_predicted_terms + 
+                                                     BWQS_params[BWQS_params$label == "beta1",]$`2.5%` * BWQS_index$BWQS_index),
+                                       upper = exp(BWQS_predicted_terms + 
+                                                     BWQS_params[BWQS_params$label == "beta1",]$`97.5%` * BWQS_index$BWQS_index))
+rm(BWQS_predicted_terms)
 
 BWQS_predicted_infections = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
   m1data$K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), "mean"]))
 colnames(BWQS_predicted_infections) <- "predicted"
 
-# predictions at the median BWQS index value
-testing_prediction_medianbwqs = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
-  (BWQS_params[BWQS_params$label == "beta1", ]$mean * median(BWQS_index$BWQS_index)) + 
-   m1data$K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), "mean"]))
+# calculate predictions at the median BWQS index value
+tests_predicted_terms = BWQS_params[BWQS_params$label == "beta0", ]$mean + 
+  (BWQS_params[BWQS_params$label == "beta1", ]$mean * median(BWQS_index$BWQS_index)) 
+tests_pred_median_bwqs <- data.frame(mean = exp(tests_predicted_terms + 
+                                                  m1data$K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), "mean"])))
+rm(tests_predicted_terms)
 
 # negative binomial model with linear term for testing_ratio (no BWQS)
 nb_testing_linear<-glm.nb(m1data$data_list$y~ZCTA_ACS_COVID$testing_ratio)
@@ -970,11 +975,13 @@ summary(lm(residpartialbwqs ~ BWQS_index, data = data.frame(preddf, partialresid
 ggplot(preddf, aes(BWQS_index, m1data$data_list$y-pred)) + geom_point() + geom_smooth(se = F) + geom_smooth(method = "lm", color = "red")
 
 # Visualize the relationship between BWQS index and infection rate at the median testing_ratio
-BWQS_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, BWQS_predicted_infection_median_testing), aes(BWQS_index, y)) + geom_point() + 
-  geom_line(aes(y = predicted)) + 
+BWQS_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, BWQS_pred_median_testing), aes(BWQS_index, y)) + 
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = 'grey90') + 
+  geom_line(aes(y = mean)) + 
+  geom_point() + 
   scale_x_continuous("BWQS infection risk index") + 
   scale_y_continuous("Infections per 100,000", label=comma)
-BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", margins = "x", xparams = list(binwidth = 1))
+BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", margins = "both", xparams = list(binwidth = 1))
 BWQS_scatter
 if(export.figs) {
   png(filename = here("figures", paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
@@ -983,10 +990,10 @@ if(export.figs) {
 }
 
 # Visualize the relationship between testing_ratio and infection rate at the median BWQS
-testing_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, testing_predicted_infection_median_BWQS = testing_prediction_medianbwqs, testing_ratio = ZCTA_ACS_COVID$testing_ratio), 
+testing_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, tests_pred_median_bwqs, testing_ratio = ZCTA_ACS_COVID$testing_ratio), 
                           aes(testing_ratio, m1data$data_list$y)) + 
-  geom_ribbon(aes(ymin = testing_predicted_infection_median_BWQS.2.5., ymax = testing_predicted_infection_median_BWQS.97.5.), alpha = 0.2) + 
-  geom_line(aes(y = testing_predicted_infection_median_BWQS.mean)) + 
+  # geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) + 
+  geom_line(aes(y = mean)) + 
   geom_point() + 
   scale_x_continuous("Tests per capita") + 
   scale_y_continuous("Infections per 100,000", label=comma) + 
