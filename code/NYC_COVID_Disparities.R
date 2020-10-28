@@ -383,7 +383,7 @@ nassau_zcta_weights <- function(zcta_acs, mz_to_z, blk_to_z){
 }
 
 #function to clean ACS data
-pm(clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
+clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
   if(admin_unit=="zcta"){
     ACS_Data1a <- df %>%
       left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
@@ -422,7 +422,7 @@ pm(clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract"
   }
   
   return(ACS_Data2)
-})
+}
 
 ### Function to pull mode of transportation for our approximate of essential workers ###
 pm(fst = T,
