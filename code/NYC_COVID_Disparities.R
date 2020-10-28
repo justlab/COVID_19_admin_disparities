@@ -793,7 +793,7 @@ prep_BWQS_data <- function(df, ses_varnames){
                    XK     = cbind(K),
                    XC_new = cbind(as.matrix(X)),
                    XK_new = cbind(K),
-                   Dalp   = rep(1,length(SES_vars)),
+                   Dalp   = rep(1,length(ses_varnames)),
                    y      = as.vector(data$y))
   return(list(data_list = data_list, X = X, K = K))
 }
