@@ -103,7 +103,7 @@ extract_waic <- function (stanfit){
 }
 
 download = function(url, to, f, ...){
-    f(download.update.meta(url, file.path(data.root, "downloads"), to, f),
+    f(download.update.meta(url, file.path(data.root, "downloads"), to),
         ...)
 }
 
