@@ -8,6 +8,7 @@ library(ggplot2)
 library(zip)
 library(here)
 library(readr)
+library(ragg)
 
 here() # current working directory
 if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){ # set up default download location for MTA turnstile data
@@ -24,7 +25,6 @@ data.root = Sys.getenv("COVID_DATA")
 if (data.root == "") data.root = "data"
 if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
 print(paste("data being downloaded into directory", dQuote(data.root)))
-if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == "") message("MTA turnstile processing in a temp directory. To cache persistently set an environment variable 'MTA_TURNSTILE_DATA_DIR'. See also ?usethis::edit_r_environ()")
 
 download = function(url, to, f, ...){
   f(download.update.meta(url, file.path(data.root, "downloads"), to),
@@ -81,19 +81,28 @@ setkey(gacts, date, county)
 comp = gacts[subway_boro]
 comp = comp[!is.na(county)]
 comp = comp[, .(place, date, Google_Mobility = transit_stns/100, MTA_Turnstiles = rel_usage)]
+setnames(comp, c("MTA_Turnstiles", "Google_Mobility"), c("MTA Turnstiles", "Google Mobility"))
 
 # table that allows more recent records from one source than the other
 comp_long = melt.data.table(comp[date >= as.Date("2020-03-01")], id.vars = c("date", "place"), 
                             variable.name = "source", value.name = "relative_use", 
-                            measure.vars = c("MTA_Turnstiles", "Google_Mobility"))
+                            measure.vars = c("MTA Turnstiles", "Google Mobility"))
 
 # Plots #### 
 first_date = comp_long[, min(date)]
 last_date = comp_long[, max(date)]
 
-# Dashed lines for Google, solid for MTA
-ggplot(comp_long[place != "Staten Island" & !is.na(relative_use)], 
+# Dashed lines for Google, solid for MTA, do not exclude Staten Island
+mobplot <- ggplot(comp_long[!is.na(relative_use)], 
        aes(x = date, y = relative_use, linetype = source, col = place)) + 
+  theme_bw() + 
   geom_line() + scale_color_discrete(name = "Borough") + scale_linetype_discrete(name = "Data Source") + 
   xlab("") + ylab("relative to baseline") + 
-  scale_x_date(date_breaks = "1 week", limits = c(first_date, last_date)) + ggtitle("Transit Trends")
+  scale_x_date(breaks = seq.Date(comp_long[, min(date)], comp_long[, max(date)], by = 7), 
+               limits = c(first_date, last_date)) + ggtitle("Transit Trends")
+
+plotres = 300
+agg_png(filename = here("figures", paste0("sfig_mobility_", Sys.Date(),".png")), 
+        width = plotres*6, height = plotres*4, scaling = 2.3)
+print(mobplot)
+dev.off()
