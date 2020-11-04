@@ -104,7 +104,7 @@ extract_waic <- function (stanfit){
 }
 
 download = function(url, to, f, ...){
-    f(download.update.meta(url, file.path(data.root, "downloads"), to, f),
+    f(download.update.meta(url, file.path(data.root, "downloads"), to),
         ...)
 }
 
@@ -224,6 +224,7 @@ modzcta_to_zcta <- download(
   "ZCTA-to-MODZCTA.csv",
   read_csv
 )
+
 # download ZIP to Tract crosswalk from HUD
 zip_to_tract <- download( 
   "https://www.huduser.gov/portal/datasets/usps/ZIP_TRACT_062020.xlsx",
@@ -231,13 +232,33 @@ zip_to_tract <- download(
   function(p) read_excel(path = p, col_types = c("text", "text", "numeric", "skip", "skip", "skip"))
 ) #FIX WARNINGS
 
+
+modzcta_to_zcta1 <- modzcta_to_zcta %>% mutate(ZCTA = as.character(ZCTA))
+modzcta_to_zcta2 <- modzcta_to_zcta1 %>% mutate(MODZCTA = as.character(MODZCTA))
+
 MODZCTAs_in_NYC <- as.character(unique(ZCTA_test_series$MODZCTA))
 ZCTAs_in_NYC <- as.character(unique(modzcta_to_zcta$ZCTA))
 
-# Remove Nassau county ZCTAs
-ZCTAs_in_NYC <- ZCTAs_in_NYC[!ZCTAs_in_NYC %in% c("11001","11003","11040")]
-modzcta_to_zcta <- modzcta_to_zcta %>% 
-  filter(!ZCTA %in% c("11001","11003","11040"))
+# Block to ZCTA and County crosswalk for NY
+ny_xwalk <- download("https://lehd.ces.census.gov/data/lodes/LODES7/ny/ny_xwalk.csv.gz",
+                     "ny_xwalk.csv.gz",
+                     function(p) {
+                       zzf = gzfile(p)
+                       read.csv(zzf) %>% 
+                         dplyr::select(cty, tabblk2010, zcta, blklondd, blklatdd) %>% 
+                         mutate(tabblk2010 = as.character(tabblk2010), 
+                                zcta = as.character(zcta),
+                                cntyfips = as.character(cty)) %>% 
+                         dplyr::select(-cty)
+                     }
+)
+
+# download ZIP to Tract crosswalk from HUD
+zip_to_tract <- download(
+    "https://www.huduser.gov/portal/datasets/usps/ZIP_TRACT_062020.xlsx",
+    "ZIP_TRACT_062020.xlsx",
+    function(p) read_excel(path = p, col_types = c("text", "text", "numeric", "skip", "skip", "skip"))
+)
 
 ##We have many sources of data, so these just help to combine the various data types
 NYC_counties1 <- c("Bronx","Kings","Queens","New York","Richmond")
@@ -252,8 +273,19 @@ BWQS_stan_model <- here("code", "nb_bwqs_cov.stan")
 
 
 ####Census Data Collection and Cleaning####
+
+#function to pull 2010 block population for Queens & Nassau counties
+pm(get.qn.blocks <- function(){
+  nassau_blk_pop <- get_decennial(geography = "block", variables = "P001001", 
+                                  state = "NY", county = "Nassau", geometry = FALSE)
+  queens_blk_pop <- get_decennial(geography = "block", variables = "P001001", 
+                                  state = "NY", county = "Queens", geometry = FALSE)
+  bind_rows(nassau_blk_pop, queens_blk_pop) %>% 
+    dplyr::select(GEOID, value) %>% rename("pop2010" = "value")
+})
+
 #function to pull ACS data 
-pm(acs.f <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY"), sf_shapes = c(TRUE, FALSE)) {
+pm(acs.main <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY"), sf_shapes = c(TRUE, FALSE)) {
      ACS_Data <- get_acs(geography = admin_unit,
                          state = state_unit,
                          geometry = sf_shapes,
@@ -322,10 +354,47 @@ pm(acs.f <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")
      return(ACS_Data)
    })
 
-modzcta_to_zcta1 <- modzcta_to_zcta %>% mutate(ZCTA = as.character(ZCTA))
+# Use 2010 block population to scale Nassau County ZCTA contribution to NYC MODZCTAs
+nassau_zcta_weights <- function(zcta_acs, mz_to_z, blk_to_z){
+  blk_pop = get.qn.blocks()
+  
+  modzcta_span = c("11429", "11411", "11004") # MODZCTA with ZCTAs from both Queens & Nassau
+  border_zcta <- mz_to_z %>% filter(MODZCTA %in% modzcta_span) %>% pull(ZCTA)
+  # Filter block-zcta crosswalk table to Queens-Nassau ZCTA of interest
+  blk_to_z <- blk_to_z %>% filter(zcta %in% border_zcta)
+  
+  # Join population to block-zcta crosswalk
+  xwalk_pop <- blk_to_z %>% left_join(blk_pop, by = c("tabblk2010" = "GEOID")) 
+  
+  # Summarise 2010 population by ZCTA to calculate proportions inside NYC
+  zcta_pop_2010 <- xwalk_pop %>%
+    group_by(zcta) %>%
+    summarise(z_pop_2010 = sum(pop2010), .groups = "drop_last")
+  queens_zcta_pop_2010 <- xwalk_pop %>%
+    filter(cntyfips == "36081") %>%
+    group_by(zcta) %>%
+    summarise(queens_z_pop_2010 = sum(pop2010), .groups = "drop_last")
+  zcta_pop_props <- queens_zcta_pop_2010 %>% 
+    left_join(zcta_pop_2010, by = "zcta") %>% 
+    mutate(in_NYC_prop = queens_z_pop_2010/z_pop_2010)
+  
+  zcta_weights <- zcta_acs %>% dplyr::select(GEOID) %>% 
+    left_join(zcta_pop_props, by = c("GEOID" = "zcta")) %>%
+    dplyr::select(GEOID, in_NYC_prop) %>% 
+    mutate(in_NYC_prop = 
+             case_when(is.na(in_NYC_prop) ~ 1,
+                       TRUE               ~ in_NYC_prop))
+  
+  # Apply weights for all Census variables except median vars
+  zcta_acs <- zcta_acs %>% left_join(zcta_weights, by = "GEOID") 
+  varvec <- 1:ncol(zcta_acs)
+  varvec <- varvec[-grep("GEOID|in_NYC_prop|medincome|median_rent", names(zcta_acs))]
+  zcta_acs <- zcta_acs %>% mutate_at(vars(varvec), ~ . * in_NYC_prop)
+  zcta_acs %>% dplyr::select(-in_NYC_prop)
+}
 
 #function to clean ACS data
-pm(clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
+clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
   if(admin_unit=="zcta"){
     ACS_Data1a <- df %>%
       left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
@@ -364,12 +433,11 @@ pm(clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract"
   }
   
   return(ACS_Data2)
-})
+}
 
 ### Function to pull mode of transportation for our approximate of essential workers ###
-
 pm(fst = T,
-   acs.f2 <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")) {
+   acs.essential <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")) {
      ACS_EssentialWrkr_Commute <- get_acs(geography = admin_unit, #pull down the relevant categories 
                                           state = state_unit,
                                           variables = c(ag_car1_commute = "B08126_017",
@@ -424,15 +492,16 @@ pm(fst = T,
 
 #ZCTA CENSUS DATA
 options(tigris_use_cache = TRUE)
-ACS_Data1 <- as.data.frame(acs.f("zcta", NULL, FALSE)) #download the zcta data
-ACS_Data2 <- clean_acs_data_and_derive_vars(ACS_Data1, "zcta")
-ACS_EssentialWrkr_Commute1 = as.data.frame(acs.f2("zcta",NULL))
+ACS_Data1 <- as.data.frame(acs.main("zcta", NULL, FALSE)) #download the zcta data
+ACS_Data_scaled <- nassau_zcta_weights(ACS_Data1, modzcta_to_zcta2, ny_xwalk)
+ACS_Data2 <- clean_acs_data_and_derive_vars(ACS_Data_scaled, "zcta")
+ACS_EssentialWrkr_Commute1 = as.data.frame(acs.essential("zcta",NULL))
 
 
 #TRACT CENSUS DATA  
-acs_tracts <- acs.f("tract", "NY", TRUE)
+acs_tracts <- acs.main("tract", "NY", TRUE)
 acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
-acs_tracts_commute1 = as.data.frame(acs.f2("tract", "NY"))
+acs_tracts_commute1 = as.data.frame(acs.essential("tract", "NY"))
 
 
 #### Identify the number of supermarkets/grocery stores per area ####
@@ -537,7 +606,8 @@ Res_Bldg_Footprints2 <- Bldg_Footprints %>%
   left_join(., Pluto_ResOnly, by = "base_bbl") %>%
   mutate(bldg_volume = if_else(is.na(bldg_volume), shape_area*numfloors*10, bldg_volume),
          res_volume = (bldg_volume/unitstotal)*unitsres)
-res_bldg_tract <- st_intersection(Res_Bldg_Footprints2, tractSF)
+pm(get.tract.res <- function(res, tracts) st_intersection(res, tracts)) # takes a few minutes
+res_bldg_tract <- get.tract.res(Res_Bldg_Footprints2, tractSF)
 res_bldg_tract_sum <- st_set_geometry(res_bldg_tract, NULL) %>%
   group_by(GEOID) %>%
   summarise(total_res_volume_tract = sum(res_volume, na.rm = TRUE))
@@ -652,7 +722,7 @@ modzcta_to_zcta_chr <- data.frame(ZCTA = as.character(modzcta_to_zcta$ZCTA),
 
 # Calculate the proportion of population each combined ZCTA contributes to MODZCTA
 modzcta_to_zcta_pop <- modzcta_to_zcta_chr %>%
-  left_join(ACS_Data1[, c("GEOID", "total_pop1")], by = c("ZCTA" = "GEOID")) %>% 
+  left_join(ACS_Data_scaled[, c("GEOID", "total_pop1")], by = c("ZCTA" = "GEOID")) %>% 
   group_by(MODZCTA) %>%
   mutate(sum_pop = sum(total_pop1)) %>%
   ungroup() %>%
@@ -800,7 +870,7 @@ prep_BWQS_data <- function(df, ses_varnames){
                    XK     = cbind(K),
                    XC_new = cbind(as.matrix(X)),
                    XK_new = cbind(K),
-                   Dalp   = rep(1,length(SES_vars)),
+                   Dalp   = rep(1,length(ses_varnames)),
                    y      = as.vector(data$y))
   return(list(data_list = data_list, X = X, K = K))
 }
@@ -1049,7 +1119,7 @@ fig3a
 #if(export.figs) ggsave(plot = fig3a, filename = here("figures", paste0("fig3a","_",Sys.Date(),".png")), dpi = 600, device = "png", width = 4, height = 3.7)
 
 #Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
-Demographics <- ACS_Data1 %>% 
+Demographics <- ACS_Data_scaled %>% 
   dplyr::select(GEOID, ends_with("_raceethnic"), total_pop1) %>%
   left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
   group_by(MODZCTA) %>%
