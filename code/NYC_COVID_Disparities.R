@@ -27,6 +27,7 @@ library(splines)
 library(magic)
 library(httr)
 library(jsonlite)
+library(DHARMa)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 options(mc.cores = parallel::detectCores())
@@ -58,7 +59,7 @@ pm = function(...) pairmemo(
 #census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
 if(Sys.getenv("CENSUS_API_KEY")=="") "Census API Key Missing"
 
-export.figs = FALSE #change to true if you would like to save out figures 
+export.figs = TRUE #change to true if you would like to save out figures 
 
 # data will default to a subfolder "data/" within working directory
 # unless 1. set by an environment variable:
@@ -224,11 +225,11 @@ modzcta_to_zcta <- download(
   read_csv
 )
 # download ZIP to Tract crosswalk from HUD
-zip_to_tract <- download(
+zip_to_tract <- download( 
   "https://www.huduser.gov/portal/datasets/usps/ZIP_TRACT_062020.xlsx",
   "ZIP_TRACT_062020.xlsx",
   function(p) read_excel(path = p, col_types = c("text", "text", "numeric", "skip", "skip", "skip"))
-)
+) #FIX WARNINGS
 
 MODZCTAs_in_NYC <- as.character(unique(ZCTA_test_series$MODZCTA))
 ZCTAs_in_NYC <- as.character(unique(modzcta_to_zcta$ZCTA))
@@ -390,12 +391,18 @@ pm(fst = T,
      ACS_Essential_worker_estimates <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
        dplyr::select(-ends_with("M"), -NAME) %>%
        filter(GEOID %in% ZCTAs_in_NYC) %>%
-       mutate_at(vars(starts_with("ed_hlthcare")), ~round(./2), 0) %>% #maintain same proportions as estimated nonquarintined jobs
-       mutate_at(vars(starts_with("construct")), ~round(./4), 0) %>%
-       mutate(essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))), 
-              essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
-       rename(zcta = GEOID) %>%
-       dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans)
+       left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
+       group_by(MODZCTA) %>%
+       summarise_at(vars(2:11),
+                    ~ sum(., na.rm = T)) %>% 
+       rename(zcta = "MODZCTA") %>%
+       mutate_at(vars(starts_with("ed_hlthcare")), ~ round(. / 2), 0) %>% #maintain same proportions as estimated nonquarintined jobs
+       mutate_at(vars(starts_with("construct")), ~ round(. / 4), 0) %>%
+       mutate(
+         essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))),
+         essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
+       dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans) %>%
+       mutate(zcta = as.character(zcta))
      }
      
      else{
@@ -774,7 +781,7 @@ Compute_Bayes_R2 <- function(fit) {
               medianr2 = median(r2)))
 }
 
-m1 <- fit_BWQS_model(ZCTA_ACS_COVID, SES_vars)
+# m1 <- fit_BWQS_model(ZCTA_ACS_COVID, SES_vars)
 
 prep_BWQS_data <- function(df, ses_varnames){
   y = as.numeric(df$pos_per_100000)
@@ -803,32 +810,44 @@ m1 <- fit_BWQS_model(m1data$data_list, BWQS_stan_model)
 
 extract_waic(m1)
 Compute_Bayes_R2(m1)$meanr2
-colMedians(extract(m1,"y_new")$y_new)
-colMeans(extract(m1,"y_new")$y_new)
+# colMedians(extract(m1,"y_new")$y_new)
+# colMeans(extract(m1,"y_new")$y_new)
 
-sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m1,"y_new")$y_new))^2))
-cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m1,"y_new")$y_new), method = "kendall")
+#Examining model summary and fit statistics 
+sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m1,"y_new")$y_new))^2)) #RMSE
+# cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m1,"y_new")$y_new), method = "kendall")
+
+# residual analysis with DHARMa
+residuals_qq <- createDHARMa(simulatedResponse = t(extract(m1,"y_new")$y_new), observedResponse = m1data$data_list$y)
+plotQQunif(residuals_qq, testOutliers = F, testDispersion = F)
 
 
-Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMeans(extract(m1,"y_new")$y_new)) %>%
-  dplyr::select(pos_per_100000,Prediction, geometry) %>%
-  mutate(std_residual = (pos_per_100000-Prediction)/sd(pos_per_100000-Prediction))
+# ZCTA_BWQS_COVID_residuals_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., Scaled_Residuals = residuals_qq$scaledResiduals)
+# ggplot(data = ZCTA_BWQS_COVID_residuals_shp) + geom_sf(aes(fill = Scaled_Residuals)) +
+#   scale_fill_gradient2(midpoint = 0.5, high = "green", mid = "white", low = "red")
 
-ggplot(data = Residuals) + geom_sf(aes(fill = std_residual)) +
-  scale_fill_gradient2(midpoint = 0, high = "green", mid = "white", low = "red")
-summary(glm.nb(pos_per_100000 ~ testing_ratio, data = ZCTA_ACS_COVID))
-summary(glm.nb(pos_per_100000 ~ medincome, data = ZCTA_ACS_COVID))
+# ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
+# 
+# 
+# Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMeans(extract(m1,"y_new")$y_new)) %>%
+#   dplyr::select(pos_per_100000,Prediction, geometry) %>%
+#   mutate(std_residual = (pos_per_100000-Prediction)/sd(pos_per_100000-Prediction))
+# 
+# ggplot(data = Residuals) + geom_sf(aes(fill = std_residual)) +
+#   scale_fill_gradient2(midpoint = 0, high = "green", mid = "white", low = "red")
 
 
 # m1 = stan.model()
 # detach("package:raster", unload = TRUE) # may be needed
 
-
+exp(mean(extract(m1, "beta1")$beta1))
 vars = c("phi", "beta0", "beta1", paste0("delta", 1:3), SES_vars)
 parameters_to_drop <- c("phi", paste0("delta", 1:3), "beta0", "beta1")
 number_of_coefficients <- length(vars)
 
 BWQS_params <- bind_cols(as_tibble(summary(m1)$summary[1:number_of_coefficients,c(1,4,8)]), label = vars)
+
+BWQS_params %>% filter(label == "beta1") %>% mutate_at(vars(1:3), ~exp(.))
 
 BWQS_fits <- BWQS_params %>%
   rename(lower = "2.5%",
@@ -910,18 +929,18 @@ tests_pred_median_bwqs <- data.frame(mean = exp(tests_predicted_terms +
                                                   m1data$K %*% as.matrix(BWQS_params[grepl(pattern = "delta", BWQS_params$label), "mean"])))
 rm(tests_predicted_terms)
 
-# negative binomial model with linear term for testing_ratio (no BWQS)
-nb_testing_linear<-glm.nb(m1data$data_list$y~ZCTA_ACS_COVID$testing_ratio)
-mean(abs(m1data$data_list$y - exp(predict(nb_testing_linear)))) # MAE
-sqrt(mean((m1data$data_list$y - exp(predict(nb_testing_linear)))^2)) # RMSE
-# negative binomial with spline for testing_ratio (no BWQS)
-nb_testing_ns3df<-glm.nb(m1data$data_list$y~m1data$K)
-mean(abs(m1data$data_list$y - exp(predict(nb_testing_ns3df)))) # MAE
-sqrt(mean((m1data$data_list$y - exp(predict(nb_testing_ns3df)))^2)) # RMSE
-
-# mean absolute error of predictions from our full model
-mean(abs(m1data$data_list$y - BWQS_predicted_infections$predicted)) # MAE
-sqrt(mean((m1data$data_list$y - BWQS_predicted_infections$predicted)^2)) # RMSE
+# # negative binomial model with linear term for testing_ratio (no BWQS)
+# nb_testing_linear<-glm.nb(m1data$data_list$y~ZCTA_ACS_COVID$testing_ratio)
+# mean(abs(m1data$data_list$y - exp(predict(nb_testing_linear)))) # MAE
+# sqrt(mean((m1data$data_list$y - exp(predict(nb_testing_linear)))^2)) # RMSE
+# # negative binomial with spline for testing_ratio (no BWQS)
+# nb_testing_ns3df<-glm.nb(m1data$data_list$y~m1data$K)
+# mean(abs(m1data$data_list$y - exp(predict(nb_testing_ns3df)))) # MAE
+# sqrt(mean((m1data$data_list$y - exp(predict(nb_testing_ns3df)))^2)) # RMSE
+# 
+# # mean absolute error of predictions from our full model
+# mean(abs(m1data$data_list$y - BWQS_predicted_infections$predicted)) # MAE
+# sqrt(mean((m1data$data_list$y - BWQS_predicted_infections$predicted)^2)) # RMSE
 
 # Visualize the relationship between BWQS and test_ratio
 ggplot(data.frame(BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, BWQS_index)) + geom_point() + 
@@ -938,14 +957,14 @@ cor.test(BWQS_index$BWQS_index, ZCTA_ACS_COVID$testing_ratio, method = "spearman
 #   geom_smooth(method = "glm.nb", formula = y ~ splines::ns(x, 3), se = FALSE)
 
 # Partial regression plot for BWQS index
-nb_testing_ns3df <- glm.nb(m1data$data_list$y ~ m1data$K)
-yresid <- resid(nb_testing_ns3df)
-bwqs_testing_ns3df <- lm(BWQS_index$BWQS_index ~ m1data$K)
-bwqsresid <- resid(bwqs_testing_ns3df)
-ggplot(data.frame(yresid, bwqsresid), aes(bwqsresid, yresid)) + geom_point() + 
-  geom_smooth(formula = m1data$data_list$y ~ x, method = "lm", se = F) + 
-  ylab("residual log infection rate\n(adjusted for testing)") + xlab("residual BWQS infection risk index\n(adjusted for testing)")
-summary(lm(yresid ~ bwqsresid))
+# nb_testing_ns3df <- glm.nb(m1data$data_list$y ~ m1data$K)
+# yresid <- resid(nb_testing_ns3df)
+# bwqs_testing_ns3df <- lm(BWQS_index$BWQS_index ~ m1data$K)
+# bwqsresid <- resid(bwqs_testing_ns3df)
+# ggplot(data.frame(yresid, bwqsresid), aes(bwqsresid, yresid)) + geom_point() + 
+#   geom_smooth(formula = m1data$data_list$y ~ x, method = "lm", se = F) + 
+#   ylab("residual log infection rate\n(adjusted for testing)") + xlab("residual BWQS infection risk index\n(adjusted for testing)")
+# summary(lm(yresid ~ bwqsresid))
 
 # change in residuals adding in BWQS
 nb_testing_ns3df <- glm.nb(m1data$data_list$y ~ m1data$K)
@@ -964,15 +983,6 @@ ggplot(data.frame(pred = BWQS_predicted_infections$predicted, m1data$data_list$y
   coord_fixed() + 
   theme(aspect.ratio=1)
 
-# partial residual plot
-preddf <- data.frame(y = m1data$data_list$y, BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_COVID$testing_ratio, pred = BWQS_predicted_infections$predicted)
-preddf$partialbwqs <- log(preddf$y) - log(preddf$pred) + (BWQS_params[BWQS_params$label == "beta1", ]$mean * preddf$BWQS_index)
-ggplot(preddf, aes(BWQS_index, partialbwqs)) + geom_point() + geom_smooth(se = F) + geom_smooth(method = "lm", color = "red")
-partialresid <- residuals(glm.nb(m1data$data_list$y ~ BWQS_index + ns(testing_ratio, df = 3), data = preddf), "partial")
-colnames(partialresid) <- c("residpartialbwqs", "residpartialnstesting")
-ggplot(data.frame(preddf, partialresid), aes(BWQS_index, residpartialbwqs)) + geom_point() + geom_smooth() + geom_smooth(method = "lm", color = "red")
-summary(lm(residpartialbwqs ~ BWQS_index, data = data.frame(preddf, partialresid)))
-ggplot(preddf, aes(BWQS_index, m1data$data_list$y-pred)) + geom_point() + geom_smooth(se = F) + geom_smooth(method = "lm", color = "red")
 
 # Visualize the relationship between BWQS index and infection rate at the median testing_ratio
 BWQS_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, BWQS_pred_median_testing), aes(BWQS_index, y)) + 
@@ -996,8 +1006,8 @@ testing_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, tests_p
   geom_line(aes(y = mean)) + 
   geom_point() + 
   scale_x_continuous("Tests per capita") + 
-  scale_y_continuous("Infections per 100,000", label=comma) + 
-  theme(axis.title.y = element_blank(), axis.text.y=element_blank())
+  scale_y_continuous("Infections per 100,000", label=comma) #+ 
+  #theme(axis.title.y = element_blank(), axis.text.y=element_blank())
 testing_scatter <- ggExtra::ggMarginal(testing_scatter, type = "histogram", xparams = list(binwidth = 0.005), yparams = list(binwidth = 200))
 testing_scatter
 if(export.figs) {
@@ -1006,14 +1016,14 @@ if(export.figs) {
   dev.off()
 }
 
-# residual analysis with DHARMa
-dharm <- createDHARMa(simulatedResponse = t(extract(m1,"y_new")$y_new), observedResponse = m1data$data_list$y)
-
-ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>% bind_cols(., BWQS_index)
 
 #Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
 
+ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>%
+  bind_cols(., BWQS_index)
+
 # reproject to WGS84 to be compatible with scalebar
+
 ZCTA_BWQS_COVID_shp <- st_transform(ZCTA_BWQS_COVID_shp, 4326)
 
 # Figure 3A - BWQS Index by ZCTA
@@ -1087,9 +1097,9 @@ Below_25th_zctas <- ZCTA_BQWS %>%
 
 Race_Ethncity_below25th <- Demographics %>%
   filter(zcta %in% Below_25th_zctas$zcta) %>%
-  dplyr::select(-zcta) %>% 
+  dplyr::select(-zcta, -MODZCTA) %>% 
   summarise_all(funs(sum(.))) %>%
-  mutate_at(vars(ends_with("_raceethnic")), funs(round((./total_pop1)*100, 2)))%>%
+  mutate_at(vars(ends_with("_raceethnic")), funs(round((./total_pop1)*100, 2))) %>%
   mutate(Group = "Below 25th percentile BWQS")
 
 
@@ -1098,7 +1108,7 @@ Between_25thand75th_zctas <- ZCTA_BQWS %>%
 
 Race_Ethncity_btw_25th75th <- Demographics %>%
   filter(zcta %in% Between_25thand75th_zctas$zcta) %>%
-  dplyr::select(-zcta) %>% 
+  dplyr::select(-zcta, -MODZCTA) %>% 
   summarise_all(funs(sum(.))) %>%
   mutate_at(vars(ends_with("_raceethnic")), funs(round((./total_pop1)*100, 2)))%>%
   mutate(Group = "Between 25-75th percentile BWQS")
@@ -1108,13 +1118,13 @@ Above_75th_zctas <- ZCTA_BQWS %>%
 
 Race_Ethncity_above_75th <- Demographics %>%
   filter(zcta %in% Above_75th_zctas$zcta) %>%
-  dplyr::select(-zcta) %>% 
+  dplyr::select(-zcta, -MODZCTA) %>% 
   summarise_all(funs(sum(.))) %>%
   mutate_at(vars(ends_with("_raceethnic")), funs(round((./total_pop1)*100, 2))) %>%
   mutate(Group = "Above 75th percentile BWQS")
 
 Race_Ethncity_all <- Demographics %>%
-  dplyr::select(-zcta) %>% 
+  dplyr::select(-zcta, -MODZCTA) %>% 
   summarise_all(funs(sum(.))) %>%
   mutate_at(vars(ends_with("_raceethnic")), funs(round((./total_pop1)*100, 2)))%>%
   mutate(Group = "NYC Population")
@@ -1233,12 +1243,13 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
 #     list(model_output = model_output, quantiled_vars = X)
 #   })
 
+#BWQS using median at the tract level 
 m2data_median <- prep_BWQS_data(SES_zcta_median_testing, SES_vars_median)
 m2_median <- fit_BWQS_model(data_list = m2data_median$data_list, stan_model_path = BWQS_stan_model)
-extract_waic(m2_median)
-Compute_Bayes_R2(m2_median)
-sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m2_median,"y_new")$y_new))^2))
-cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m2_median,"y_new")$y_new), method = "kendall")
+# extract_waic(m2_median)$waic
+# Compute_Bayes_R2(m2_median)$meanr2
+# sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m2_median,"y_new")$y_new))^2))
+# cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m2_median,"y_new")$y_new), method = "kendall")
 
 SES_zcta_3q <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "3q")
 SES_vars_3q = names(SES_zcta_3q)[names(SES_zcta_3q) != "MODZCTA"]
@@ -1246,12 +1257,32 @@ SES_zcta_3q_testing <- ZCTA_ACS_COVID %>%
   dplyr::select(zcta, pos_per_100000, testing_ratio) %>%
   left_join(SES_zcta_3q, by = c("zcta" = "MODZCTA"))
 
+#BWQS using the 3rd quartile at the tract level 
 m2data_3q <- prep_BWQS_data(SES_zcta_3q_testing, SES_vars_3q)
 m2_3q <- fit_BWQS_model(data_list = m2data_3q$data_list, stan_model_path = BWQS_stan_model)
-extract_waic(m2_3q)
-Compute_Bayes_R2(m2_3q)
-sqrt(mean((SES_zcta_3q_testing$pos_per_100000 - colMedians(extract(m2_3q,"y_new")$y_new))^2))
-cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m2_3q,"y_new")$y_new), method = "kendall")
+# extract_waic(m2_3q)$waic[[1]]
+# Compute_Bayes_R2(m2_3q)$meanr2
+# sqrt(mean((SES_zcta_3q_testing$pos_per_100000 - colMedians(extract(m2_3q,"y_new")$y_new))^2))
+# # cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m2_3q,"y_new")$y_new), method = "kendall")
+
+Summarize_BWQS_performance <- function(model, df){
+         model_type = deparse(substitute(model))
+         waic = extract_waic(model)$waic[[1]]
+         bayesr2 = Compute_Bayes_R2(model)$meanr2
+         rmse = sqrt(mean((df$pos_per_100000 - colMedians(extract(model,"y_new")$y_new))^2))  
+         effect_estimate = exp(mean(extract(model, "beta1")$beta1))
+         
+         summarized <- bind_cols(model_name = as.character(model_type), waic = waic, bayesr2 = bayesr2, rmse = rmse, effect_estimate = effect_estimate)
+         
+         return(summarized)
+}
+
+bind_rows(Summarize_BWQS_performance(m1, SES_zcta_median_testing),
+  Summarize_BWQS_performance(m2_median, SES_zcta_median_testing),
+  Summarize_BWQS_performance(m2_3q, SES_zcta_3q_testing),
+)
+
+
 
 #### Step 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
 
@@ -1322,21 +1353,21 @@ Subway_BWQS_df <- Subway_ridership_by_UHF %>%
   arrange(date) %>%
   mutate(time_index = time(date)) %>%
   filter(!is.na(Risk) & date != "2020-02-17") %>% #removing Presidents' Day national holiday 
-  anti_join(., service_changes_in_lowsubway_areas, by = c("date", "place")) #removing low outliers due to service changes in low subway density areas
-
+  anti_join(., service_changes_in_lowsubway_areas, by = c("date", "place")) %>%#removing low outliers due to service changes in low subway density areas
+  ungroup()
+  
 fit_drm_all <- drm(usage.median.ratio ~ time_index, fct = W2.4(), data = Subway_BWQS_df)
 plot(fit_drm_all)
-fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = T)
-
-# fit_drm_risk_high <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="High")
-# fit_drm_risk_low <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="Low")
+fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = T) #using this for inference
+fit_drm_interact1 <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = F) #using this for plotting -- can't get separate = T to plot correctly!
+fit_drm_risk_high <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="High")
+fit_drm_risk_low <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="Low")
 anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
 
 summary(fit_drm_interact)
 confint(fit_drm_interact)
 compParm(fit_drm_interact, "b", "-")
 compParm(fit_drm_interact, "c", "-")
-
 
 slopes <- as_tibble(coef(fit_drm_interact), rownames = "vars") %>%
   separate(col = vars, into = c("vars", "BWQS_risk"), sep = ":") %>%
@@ -1351,8 +1382,9 @@ as_tibble(confint(fit_drm_interact), rownames = "vars") %>%
   slope_higher_ci = -`97.5 %`*(-d/(4*e))) %>%
   dplyr::select(BWQS_risk, slope, slope_lower_ci, slope_higher_ci)
 
-
-fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler))
+fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact1, as.data.frame(Subway_BWQS_df %>% dplyr::select(usage.median.ratio, time_index, Risk)), 
+                                                             interval = "confidence"), warning = handler))
+# fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler))
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
 Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
@@ -1437,6 +1469,78 @@ fig3c
 # sfig1 <- ggarrange(fig3b, sfig1b, nrow = 1)
 # if(export.figs) ggexport(sfig1, filename = here("figures", paste0("sfig1", "_", Sys.Date(),".png")), res = 300, width = 7.3*300, height = 3.7*300)
 
+
+#Step 2: Run negative binomial model with spatial filtering  
+
+#Step 2a: Identify the neighbor relationships 
+spdat.sens <- as_Spatial(ZCTA_BWQS_COVID_shp1)
+ny.nb6 <- knearneigh(sp::coordinates(spdat.sens), k=6)
+ny.nb6 <- knn2nb(ny.nb6)
+ny.nb6 <- make.sym.nb(ny.nb6)
+ny.wt6 <- nb2listw(ny.nb6, style="W")
+
+#Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
+fit.nb.ny.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index, spdat.sens)
+lm.morantest(fit.nb.ny.sens, listw = ny.wt6)
+me.fit.sens <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index,
+                              spdat.sens@data, family=negative.binomial(fit.nb.ny.sens$theta), listw = ny.wt6, verbose=T, alpha=.1, nsim = 999)
+
+#Step 2c: Pull out these fits and visualize the autocorrelation
+fits.sens <- data.frame(fitted(me.fit.sens))
+spdat.sens$me16 <- fits.sens$vec16
+spdat.sens$me23 <- fits.sens$vec23
+# spdat.sens$me24 <- fits$vec24
+spplot(spdat.sens, "me16", at=quantile(spdat.sens$me16, p=seq(0,1,length.out = 7)))
+spplot(spdat.sens, "me23", at=quantile(spdat.sens$me23, p=seq(0,1,length.out = 7)))
+# spplot(spdat.sens, "me24", at=quantile(spdat.sens$me24, p=seq(0,1,length.out = 7)))
+
+#Step 2d: Include the fits in our regression model as an additional parameter
+clean.nb.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index+fitted(me.fit.sens), spdat.sens@data)
+tidy(clean.nb.sens) %>% mutate(estimate_exp = exp(estimate))
+as_tibble(confint(clean.nb.sens), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
+lm.morantest(clean.nb.sens, resfun = residuals, listw=ny.wt6)
+spdat.sens$nb_residuals <- clean.nb.sens$residuals
+spplot(spdat.sens, "nb_residuals", at=quantile(spdat.sens$nb_residuals, p=seq(0,1,length.out = 10)))
+ggplot() + geom_sf(data = st_as_sf(spdat.sens),aes(fill = cut_width(nb_residuals, width = 1))) + labs(fill = "Residuals\n(Standard Deviations)")
+
+# ##Outliers from BWQS
+# outliers <- Compare_Metrics %>%
+#   mutate(residual = pos_per_100000-BWQS_index,
+#          std_residual = residual/sd(residual))
+# # dplyr::select(zcta, std_residual) 
+# 
+# outlier_shp <- ZCTA_ACS_COVID_shp %>% 
+#   inner_join(., outliers, by = "zcta")
+# 
+# ggplot() + geom_sf(data = outlier_shp, aes(fill = std_residual)) + scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7))
+# ggplot() + geom_sf(data = outlier_shp, aes(fill = testing_ratio.y)) + scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7))
+# #Step 2a: Identify the neighbor relationships 
+# spdat <- as_Spatial(ZCTA_BWQS_COVID_shp1)
+# ny.nb4 <- knearneigh(sp::coordinates(spdat), k=4)
+# ny.nb4 <- knn2nb(ny.nb4)
+# ny.nb4 <- make.sym.nb(ny.nb4)
+# ny.wt4 <- nb2listw(ny.nb4, style="W")
+# 
+# #Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
+# fit.nb.ny<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index, spdat)
+# lm.morantest(fit.nb.ny, listw = ny.wt4)
+# me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index,
+#                          spdat@data, family=negative.binomial(6.75351), listw = ny.wt4, verbose=T, alpha=.1, nsim = 999)
+# 
+# #Step 2c: Pull out these fits and visualize the autocorrelation
+# fits <- data.frame(fitted(me.fit))
+# spdat$me22 <- fits$vec22
+# spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
+# 
+# #Step 2d: Include the fits in our regression model as an additional parameter
+# clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index+fitted(me.fit), spdat@data)
+# tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
+# as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
+# lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
+# spdat$nb_residuals <- clean.nb$residuals
+# spplot(spdat, "nb_residuals", at=quantile(spdat$nb_residuals, p=seq(0,1,length.out = 10)))
+# ggplot() + geom_sf(data = st_as_sf(spdat),aes(fill = cut_width(nb_residuals, width = 1))) + labs(fill = "Residuals\n(Standard Deviations)")
+
 # Combine subfigures to make Figure 3: maps of BWQS, Tests, and Mortality by ZCTA
 fig3a_2 = fig3a + labs(tag = "A") + theme(plot.tag.position = c(0.0,0.99), plot.tag = element_text(face = "bold", size = 14))
 fig3b_2 = fig3b + labs(tag = "B") + theme(plot.tag.position = c(0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
@@ -1444,40 +1548,12 @@ fig3c_2 = fig3c + labs(tag = "C") + theme(plot.tag.position = c(-0.025, 0.945), 
 
 plotres = 300
 agg_png(filename = here("figures", paste0("fig3_combined_2_", Sys.Date(), "_ragg.png")), 
-    width = plotres*4.25, height = plotres*6, scaling = 2)
+        width = plotres*4.25, height = plotres*6, scaling = 2)
 grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1), 
              arrangeGrob(fig3b_2, fig3c_2, ncol = 2, nrow = 1),
              nrow = 2, ncol = 1, heights = c(1.9,1))
 dev.off()
 
-#Step 2: Run negative binomial model with spatial filtering  
-
-#Step 2a: Identify the neighbor relationships 
-spdat <- as_Spatial(ZCTA_BWQS_COVID_shp1)
-ny.nb4 <- knearneigh(sp::coordinates(spdat), k=4)
-ny.nb4 <- knn2nb(ny.nb4)
-ny.nb4 <- make.sym.nb(ny.nb4)
-ny.wt4 <- nb2listw(ny.nb4, style="W")
-
-#Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
-fit.nb.ny<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index, spdat)
-lm.morantest(fit.nb.ny, listw = ny.wt4)
-me.fit <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index,
-                         spdat@data, family=negative.binomial(6.75351), listw = ny.wt4, verbose=T, alpha=.1, nsim = 999)
-
-#Step 2c: Pull out these fits and visualize the autocorrelation
-fits <- data.frame(fitted(me.fit))
-spdat$me22 <- fits$vec22
-spplot(spdat, "me22", at=quantile(spdat$me22, p=seq(0,1,length.out = 7)))
-
-#Step 2d: Include the fits in our regression model as an additional parameter
-clean.nb<-glm.nb(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index+fitted(me.fit), spdat@data)
-tidy(clean.nb) %>% mutate(estimate_exp = exp(estimate))
-as_tibble(confint(clean.nb), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
-lm.morantest(clean.nb, resfun = residuals, listw=ny.wt4)
-spdat$nb_residuals <- clean.nb$residuals
-spplot(spdat, "nb_residuals", at=quantile(spdat$nb_residuals, p=seq(0,1,length.out = 10)))
-ggplot() + geom_sf(data = st_as_sf(spdat),aes(fill = cut_width(nb_residuals, width = 1))) + labs(fill = "Residuals\n(Standard Deviations)")
 
 ####  Sensitivity Analyses  ####
 
@@ -1495,8 +1571,7 @@ View(as_tibble(extract(m1, c("W[1]","W[2]", "W[3]", "W[4]", "W[5]", "W[6]", "W[7
 
 ##Just using proportion uninsured and median income
 names(ZCTA_ACS_COVID)
-glm_insurance_and_income <- glm.nb(pos_per_100000 ~ not_insured + medincome + testing_ratio, data = ZCTA_ACS_COVID)
-car::vif(glm_insurance_and_income)
+glm_esstl_and_income <- glm.nb(pos_per_100000 ~ not_quarantined_jobs + medincome + testing_ratio, data = ZCTA_ACS_COVID)
 broom::tidy(glm_insurance_and_income)
 plot(glm_insurance_and_income)
 enframe(predict(glm_insurance_and_income)) %>% mutate(value = exp(value))
@@ -1523,19 +1598,24 @@ summary(glm_princomp)
 exp(confint(glm.nb(pos_per_100000 ~ PC1 + ns(testing_ratio, df = 3), data = df_for_PCA_analysis)))
 
 enframe(predict(glm_princomp)) %>% mutate(glm_princomp = exp(value)) %>% dplyr::select(glm_princomp)
-enframe(predict(glm_insurance_and_income)) %>% mutate(glm_ins_and_income = exp(value)) %>% dplyr::select(glm_ins_and_income)
+enframe(predict(glm_esstl_and_income)) %>% mutate(glm_esstl_and_income = exp(value)) %>% dplyr::select(glm_esstl_and_income)
 
 Compare_Metrics <- bind_cols(ZCTA_ACS_COVID,
                              glm_princomp = enframe(predict(glm_princomp)) %>% mutate(glm_princomp = exp(value)) %>% dplyr::select(glm_princomp),
-                             glm_ins_and_income = enframe(predict(glm_insurance_and_income)) %>% mutate(glm_ins_and_income = exp(value)) %>% dplyr::select(glm_ins_and_income),
-                             BWQS_index = BWQS_predicted_infections)
+                             glm_esstl_and_income = enframe(predict(glm_esstl_and_income)) %>% mutate(glm_esstl_and_income = exp(value)) %>% dplyr::select(glm_esstl_and_income),
+                             BWQS_index = BWQS_predicted_infections$predicted)
 
 
-Compare_Metrics %>% summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_ins_and_income")), ~cor(pos_per_100000, .x, method = "kendall"))
-Compare_Metrics %>% summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_ins_and_income")), ~MAE(pos_per_100000, .x)) 
+bind_rows(Compare_Metrics %>% 
+            summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_esstl_and_income")), 
+                         ~cor(pos_per_100000, .x, method = "kendall")) %>%
+            mutate(parameter = "kendalls"),
+          Compare_Metrics %>% 
+            summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_esstl_and_income")), 
+                         ~sqrt(mean(pos_per_100000-.x)^2)) %>%
+            mutate(parameter = "RMSE"))
 
-Compare_Metrics %>% summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_ins_and_income")), ~mean(abs(pos_per_100000-.x)))
-
+sqrt(mean((m - o)^2))
 ##Examining residuals of the BWQS -- map??
 
 ##Subway analyses 
@@ -1724,50 +1804,7 @@ sfig6 <- ggplot() +
 
 sfig6
 
-## Trying negative binomial spatial mortality model with different adjacency matrix
 
-#Step 2a: Identify the neighbor relationships 
-spdat.sens <- as_Spatial(ZCTA_BWQS_COVID_shp1)
-ny.nb6 <- knearneigh(sp::coordinates(spdat.sens), k=6)
-ny.nb6 <- knn2nb(ny.nb6)
-ny.nb6 <- make.sym.nb(ny.nb6)
-ny.wt6 <- nb2listw(ny.nb6, style="W")
-
-#Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
-fit.nb.ny.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index, spdat.sens)
-lm.morantest(fit.nb.ny.sens, listw = ny.wt6)
-me.fit.sens <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index,
-                         spdat@data, family=negative.binomial(6.720348), listw = ny.wt6, verbose=T, alpha=.1, nsim = 999)
-
-#Step 2c: Pull out these fits and visualize the autocorrelation
-fits.sens <- data.frame(fitted(me.fit.sens))
-spdat.sens$me16 <- fits$vec16
-spdat.sens$me23 <- fits$vec23
-spdat.sens$me24 <- fits$vec24
-spplot(spdat.sens, "me16", at=quantile(spdat.sens$me16, p=seq(0,1,length.out = 7)))
-spplot(spdat.sens, "me23", at=quantile(spdat.sens$me23, p=seq(0,1,length.out = 7)))
-spplot(spdat.sens, "me24", at=quantile(spdat.sens$me24, p=seq(0,1,length.out = 7)))
-
-#Step 2d: Include the fits in our regression model as an additional parameter
-clean.nb.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index+fitted(me.fit.sens), spdat@data)
-tidy(clean.nb.sens) %>% mutate(estimate_exp = exp(estimate))
-as_tibble(confint(clean.nb.sens), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
-lm.morantest(clean.nb.sens, resfun = residuals, listw=ny.wt6)
-spdat.sens$nb_residuals <- clean.nb.sens$residuals
-spplot(spdat.sens, "nb_residuals", at=quantile(spdat.sens$nb_residuals, p=seq(0,1,length.out = 10)))
-ggplot() + geom_sf(data = st_as_sf(spdat.sens),aes(fill = cut_width(nb_residuals, width = 1))) + labs(fill = "Residuals\n(Standard Deviations)")
-
-##Outliers from BWQS
-outliers <- Compare_Metrics %>%
-  mutate(residual = pos_per_100000-BWQS_index,
-         std_residual = residual/sd(residual))
-  # dplyr::select(zcta, std_residual) 
-
- outlier_shp <- ZCTA_ACS_COVID_shp %>% 
-   inner_join(., outliers, by = "zcta")
-
-ggplot() + geom_sf(data = outlier_shp, aes(fill = std_residual)) + scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7))
-ggplot() + geom_sf(data = outlier_shp, aes(fill = testing_ratio.y)) + scale_fill_gradientn(colours=brewer_pal("BuPu", type = "seq")(7))
 
 #### Appendix
 Sys.time()
