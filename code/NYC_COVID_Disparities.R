@@ -27,6 +27,7 @@ library(splines)
 library(magic)
 library(httr)
 library(jsonlite)
+library(DHARMa)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 options(mc.cores = parallel::detectCores())
@@ -834,8 +835,6 @@ Compute_Bayes_R2 <- function(fit) {
               medianr2 = median(r2)))
 }
 
-m1 <- fit_BWQS_model(ZCTA_ACS_COVID, SES_vars)
-
 prep_BWQS_data <- function(df, ses_varnames){
   y = as.numeric(df$pos_per_100000)
   X <- df %>%
@@ -859,16 +858,29 @@ prep_BWQS_data <- function(df, ses_varnames){
 }
 
 m1data <- prep_BWQS_data(ZCTA_ACS_COVID, SES_vars)
+
+# sensitivity analysis -- poisson model
+# BWQS_poisson_stan_model <- here("code", "poisson_bwqs_cov.stan") 
+# m1_poisson <- fit_BWQS_model(m1data$data_list, BWQS_poisson_stan_model)
+# extract_waic(m1_poisson)
+
+# residual analysis with DHARMa
+# dharm_poisson <- createDHARMa(simulatedResponse = t(extract(m1_poisson,"y_new")$y_new), observedResponse = m1data$data_list$y)
+# plot(dharm_poisson)
+
+# fit our primary model -- negative binomial
 m1 <- fit_BWQS_model(m1data$data_list, BWQS_stan_model)
+
+# model diagnostics (n_eff as % of 1750, Rhat, trace plots, acf)
+m1
+min(summary(m1)$summary[,"n_eff"]/1750) # effective sample size is at worst 78%
+traceplot(m1, pars = c("beta1", "W"))
+stan_ac(m1, pars = c("beta1", "W"))
 
 extract_waic(m1)
 Compute_Bayes_R2(m1)$meanr2
 colMedians(extract(m1,"y_new")$y_new)
 colMeans(extract(m1,"y_new")$y_new)
-
-sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m1,"y_new")$y_new))^2))
-cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m1,"y_new")$y_new), method = "kendall")
-
 
 Residuals <- ZCTA_ACS_COVID_shp %>% bind_cols(Prediction = colMeans(extract(m1,"y_new")$y_new)) %>%
   dplyr::select(pos_per_100000,Prediction, geometry) %>%
@@ -1003,7 +1015,7 @@ yresid <- resid(nb_testing_ns3df)
 bwqs_testing_ns3df <- lm(BWQS_index$BWQS_index ~ m1data$K)
 bwqsresid <- resid(bwqs_testing_ns3df)
 ggplot(data.frame(yresid, bwqsresid), aes(bwqsresid, yresid)) + geom_point() + 
-  geom_smooth(formula = m1data$data_list$y ~ x, method = "lm", se = F) + 
+  geom_smooth(formula = y ~ x, method = "lm", se = F) + 
   ylab("residual log infection rate\n(adjusted for testing)") + xlab("residual BWQS infection risk index\n(adjusted for testing)")
 summary(lm(yresid ~ bwqsresid))
 
@@ -1123,8 +1135,7 @@ Demographics_for_ridges <- Demographics %>%
          `Race/Ethnicity` = factor(`Race/Ethnicity`, levels = c( "White",  "Asian", "Other","Hispanic/Latinx","Black")),
          Population = as.numeric(Population)) 
 
-
-View(Demographics_for_ridges %>%
+(Demographics_for_ridges %>%
   group_by(`Race/Ethnicity`) %>%
   summarise(weighted.mean(BWQS_index, Population),
             weightedMedian(BWQS_index, Population)))
