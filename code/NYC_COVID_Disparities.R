@@ -390,7 +390,6 @@ nassau_zcta_weights <- function(zcta_acs, mz_to_z, blk_to_z){
   varvec <- 1:ncol(zcta_acs)
   varvec <- varvec[-grep("GEOID|in_NYC_prop|medincome|median_rent", names(zcta_acs))]
   zcta_acs <- zcta_acs %>% mutate_at(vars(varvec), ~ . * in_NYC_prop)
-  zcta_acs %>% dplyr::select(-in_NYC_prop)
 }
 
 #function to clean ACS data
@@ -437,7 +436,7 @@ clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
 
 ### Function to pull mode of transportation for our approximate of essential workers ###
 pm(fst = T, 
-   get_essential_acs <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")) {
+   get_essential_acs <- function(admin_unit, state_unit) {
      get_acs(geography = admin_unit, #pull down the relevant categories 
              state = state_unit,
              variables = c(ag_car1_commute = "B08126_017",
@@ -455,14 +454,23 @@ pm(fst = T,
              survey = "acs5")
 })
 
-acs.essential <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")) {
-     ACS_EssentialWrkr_Commute <- get_essential_acs(admin_unit = admin_unit, state_unit = state_unit)
+acs.essential <- function(admin_unit, zcta_pop = NULL, state_unit = NULL) {
+  if(!admin_unit %in% c("zcta", "tract")) stop("admin_unit must be either 'zcta' or 'tract'")
+  if(admin_unit == "tract" & is.null(state_unit)) stop("state_unit must be set to download tracts")
+  if(!is.null(state_unit)) if(state_unit != "NY") stop("state_unit must be either NULL or 'NY'")
+  
+  ACS_EssentialWrkr_Commute <- get_essential_acs(admin_unit = admin_unit, state_unit = state_unit)
      
-     if(admin_unit == "zcta"){
+   if(admin_unit == "zcta"){
+     if(is.null(zcta_pop)) stop("zcta_pop must be set for scaling MODZCTA on Queens/Nassau boundary")
      
      ACS_Essential_worker_estimates <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
        dplyr::select(-ends_with("M"), -NAME) %>%
        filter(GEOID %in% ZCTAs_in_NYC) %>%
+       # scale ZCTAs by proportion of population in NYC
+       right_join(zcta_pop %>% dplyr::select("GEOID", "in_NYC_prop"), by = "GEOID") %>% 
+       mutate_at(vars(2:11), ~ . * in_NYC_prop) %>% 
+       # summarize ZCTA to MODZCTA
        left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
        group_by(MODZCTA) %>%
        summarise_at(vars(2:11),
@@ -475,8 +483,8 @@ acs.essential <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, 
          essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
        dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans) %>%
        mutate(zcta = as.character(zcta))
-     } 
-     else { # tracts
+   } 
+   else { # tracts
        
      ACS_Essential_worker_estimates <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
          dplyr::select(-ends_with("M"), -NAME) %>%
@@ -486,9 +494,9 @@ acs.essential <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, 
          mutate(essentialworker_drove = rowSums(dplyr::select(., contains("car1_commute"))), 
                 essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
          dplyr::select(GEOID, essentialworker_drove, essentialworker_pubtrans)   
-     }
+   }
      
-     return(ACS_Essential_worker_estimates)
+   return(ACS_Essential_worker_estimates)
 }
 
 
@@ -497,13 +505,13 @@ options(tigris_use_cache = TRUE)
 ACS_Data1 <- as.data.frame(acs.main("zcta", NULL, FALSE)) #download the zcta data
 ACS_Data_scaled <- nassau_zcta_weights(ACS_Data1, modzcta_to_zcta2, ny_xwalk)
 ACS_Data2 <- clean_acs_data_and_derive_vars(ACS_Data_scaled, "zcta")
-ACS_EssentialWrkr_Commute1 = as.data.frame(acs.essential("zcta",NULL))
+ACS_EssentialWrkr_Commute1 = as.data.frame(acs.essential("zcta", zcta_pop = ACS_Data_scaled, state_unit = NULL))
 
 
 #TRACT CENSUS DATA  
 acs_tracts <- acs.main("tract", "NY", TRUE)
 acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
-acs_tracts_commute1 = as.data.frame(acs.essential("tract", "NY"))
+acs_tracts_commute1 = as.data.frame(acs.essential("tract", state_unit = "NY"))
 
 
 #### Identify the number of supermarkets/grocery stores per area ####
