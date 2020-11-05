@@ -436,23 +436,27 @@ clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
 }
 
 ### Function to pull mode of transportation for our approximate of essential workers ###
-pm(fst = T,
-   acs.essential <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")) {
-     ACS_EssentialWrkr_Commute <- get_acs(geography = admin_unit, #pull down the relevant categories 
-                                          state = state_unit,
-                                          variables = c(ag_car1_commute = "B08126_017",
-                                                        ag_pubtrans_commute = "B08126_047",
-                                                        construct_car1_commute ="B08126_018",
-                                                        construct_pubtrans_commute = "B08126_048",
-                                                        wholesale_car1_commute = "B08126_020",
-                                                        wholesale_pubtrans_commute = "B08126_050",
-                                                        transpo_car1_commute = "B08126_022",
-                                                        transpo_pubtrans_commute = "B08126_052",
-                                                        ed_hlthcare_car1_commute = "B08126_026",
-                                                        ed_hlthcare_pubtrans_commute = "B08126_056"),
-                                          year = 2018, 
-                                          output = "wide",
-                                          survey = "acs5")
+pm(fst = T, 
+   get_essential_acs <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")) {
+     get_acs(geography = admin_unit, #pull down the relevant categories 
+             state = state_unit,
+             variables = c(ag_car1_commute = "B08126_017",
+                           ag_pubtrans_commute = "B08126_047",
+                           construct_car1_commute ="B08126_018",
+                           construct_pubtrans_commute = "B08126_048",
+                           wholesale_car1_commute = "B08126_020",
+                           wholesale_pubtrans_commute = "B08126_050",
+                           transpo_car1_commute = "B08126_022",
+                           transpo_pubtrans_commute = "B08126_052",
+                           ed_hlthcare_car1_commute = "B08126_026",
+                           ed_hlthcare_pubtrans_commute = "B08126_056"),
+             year = 2018, 
+             output = "wide",
+             survey = "acs5")
+})
+
+acs.essential <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY")) {
+     ACS_EssentialWrkr_Commute <- get_essential_acs(admin_unit = admin_unit, state_unit = state_unit)
      
      if(admin_unit == "zcta"){
      
@@ -485,8 +489,7 @@ pm(fst = T,
      }
      
      return(ACS_Essential_worker_estimates)
-     
-   })
+}
 
 
 #ZCTA CENSUS DATA
