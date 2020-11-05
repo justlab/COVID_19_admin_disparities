@@ -204,7 +204,7 @@ MODZCTA_NYC_shp <- download(
 
 #Food outlets 
 if(use_repo_data){
-  food_retail <- read_csv("data/retail_food_stores_2019-06-13.csv")
+  food_retail <- read_csv(here("data/retail_food_stores_2019-06-13.csv"))
 } else {
   food_retail <- download(
       "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
