@@ -454,7 +454,7 @@ pm(fst = T,
                                           output = "wide",
                                           survey = "acs5")
      
-     if(is.null(state_unit)){
+     if(admin_unit == "zcta"){
      
      ACS_Essential_worker_estimates <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
        dplyr::select(-ends_with("M"), -NAME) %>%
@@ -471,9 +471,8 @@ pm(fst = T,
          essentialworker_pubtrans = rowSums(dplyr::select(., contains("pubtrans")))) %>%
        dplyr::select(zcta, essentialworker_drove, essentialworker_pubtrans) %>%
        mutate(zcta = as.character(zcta))
-     }
-     
-     else{
+     } 
+     else { # tracts
        
      ACS_Essential_worker_estimates <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
          dplyr::select(-ends_with("M"), -NAME) %>%
