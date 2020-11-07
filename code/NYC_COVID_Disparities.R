@@ -28,6 +28,7 @@ library(magic)
 library(httr)
 library(jsonlite)
 library(DHARMa)
+library(kableExtra)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 options(mc.cores = parallel::detectCores())
@@ -885,15 +886,6 @@ prep_BWQS_data <- function(df, ses_varnames){
 
 m1data <- prep_BWQS_data(ZCTA_ACS_COVID, SES_vars)
 
-# sensitivity analysis -- poisson model
-# BWQS_poisson_stan_model <- here("code", "poisson_bwqs_cov.stan") 
-# m1_poisson <- fit_BWQS_model(m1data$data_list, BWQS_poisson_stan_model)
-# extract_waic(m1_poisson)
-
-# residual analysis with DHARMa
-# dharm_poisson <- createDHARMa(simulatedResponse = t(extract(m1_poisson,"y_new")$y_new), observedResponse = m1data$data_list$y)
-# plot(dharm_poisson)
-
 # fit our primary model -- negative binomial
 m1 <- fit_BWQS_model(m1data$data_list, BWQS_stan_model)
 
@@ -909,7 +901,7 @@ Compute_Bayes_R2(m1)$meanr2
 # colMeans(extract(m1,"y_new")$y_new)
 
 #Examining model summary and fit statistics 
-sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m1,"y_new")$y_new))^2)) #RMSE
+# sqrt(mean((SES_zcta_median_testing$pos_per_100000 - colMedians(extract(m1,"y_new")$y_new))^2)) #RMSE
 # cor(SES_zcta_median_testing$pos_per_100000, colMedians(extract(m1,"y_new")$y_new), method = "kendall")
 
 # residual analysis with DHARMa
@@ -940,7 +932,7 @@ vars = c("phi", "beta0", "beta1", paste0("delta", 1:3), SES_vars)
 parameters_to_drop <- c("phi", paste0("delta", 1:3), "beta0", "beta1")
 number_of_coefficients <- length(vars)
 
-BWQS_params <- bind_cols(as_tibble(summary(m1)$summary[1:number_of_coefficients,c(1,4,8)]), label = vars)
+BWQS_params <- bind_cols(as_tibble(summary(m1)$summary[1:number_of_coefficients,c(1,4,6,8:10)]), label = vars)
 
 BWQS_params %>% filter(label == "beta1") %>% mutate_at(vars(1:3), ~exp(.))
 
@@ -966,6 +958,21 @@ labels1 <- c("one_over_medincome" = "1/\nMedian income",
              "res_vol_popdensity" = "Population Density\nby Residential Volume", 
              "avg_hhold_size" = "Average people\nper household")
 
+labels2 <- c("phi" = "Overdispersion", 
+             "beta0" = "Intercept", 
+             "beta1" = "BWQS term",
+             "delta1" = "Testing ratio: spline term 1",
+             "delta2" = "Testing ratio: spline term 2",
+             "delta3" = "Testing ratio: spline term 3",
+             labels1)
+
+# create a table of parameter estimates
+BWQS_params %>% bind_cols(., "terms" = labels2) %>%
+  dplyr::select(-label) %>%
+  mutate_at(vars(1:6), ~round(., 3)) %>%
+  mutate_at(vars(5), ~round(., 0)) %>%
+  kbl(caption = paste0("Negative Binomial BWQS")) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
 
 fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, ymax=upper)) +
   geom_pointrange() + 
@@ -1576,7 +1583,7 @@ ny.wt6 <- nb2listw(ny.nb6, style="W")
 #Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
 fit.nb.ny.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index, spdat.sens)
 lm.morantest(fit.nb.ny.sens, listw = ny.wt6)
-me.fit.sens <- spatialreg::ME(deaths_count~offset(log(total_pop1))+scale(age65_plus/total_pop1)+BWQS_index,
+me.fit.sens <- spatialreg::ME(deaths_count~offset(log(total_pop1))+BWQS_index,
                               spdat.sens@data, family=negative.binomial(fit.nb.ny.sens$theta), listw = ny.wt6, verbose=T, alpha=.1, nsim = 999)
 
 #Step 2c: Pull out these fits and visualize the autocorrelation
@@ -1650,6 +1657,15 @@ dev.off()
 
 
 ####  Sensitivity Analyses  ####
+
+## half-cauchy prior for overdispersion parameter
+BWQS_NB_halfcauchy_stan_model <- here("code", "nb_bwqs_halfcauchy.stan") 
+m1_halfcauchy <- fit_BWQS_model(m1data$data_list, BWQS_NB_halfcauchy_stan_model)
+# beta1 effect estimate using half-cauchy prior for overdispersion
+exp(summary(m1_halfcauchy)$summary[3,c(1,4,8)])
+# main model (inverse gamma prior for overdispersion)
+exp(summary(m1)$summary[3,c(1,4,8)])
+# no meaningful difference in effect estimate or credible interval!
 
 ##BWQS weights -- stability of the rankings 
 View(as_tibble(extract(m1, c("W[1]","W[2]", "W[3]", "W[4]", "W[5]", "W[6]", "W[7]", "W[8]", "W[9]", "W[10]"))) %>%
