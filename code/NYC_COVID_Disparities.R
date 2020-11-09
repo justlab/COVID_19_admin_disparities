@@ -525,13 +525,21 @@ food_retail_filtered <- food_retail %>%
   filter(!str_detect(`Entity Name`, non_supermarket_strings) & !str_detect(`DBA Name`, non_supermarket_strings)) %>%
   filter(`Square Footage`>=4500) %>%
   mutate(zcta = as.character(str_extract(Location, "[:digit:]{5}"))) %>% 
-  mutate(Address = paste(paste(`Street Number`, `Street Name`), City, State, zcta, sep = ","))
+  mutate(Address = case_when(
+    # some locations geocode better when address includes city name
+    `License Number` %in% c("638599", "712410", "706967", "710078") ~ 
+      paste(paste(`Street Number`, `Street Name`), City, State, zcta, sep = ","),
+    # but most geocode better without it, see limitation #4 at: http://gis.ny.gov/gisdata/inventories/details.cfm?DSID=1278
+    TRUE ~ 
+      paste(paste(`Street Number`, `Street Name`), State, zcta, sep = ",") )
+  )
 nrow(food_retail_filtered) # 1037
 
 # Geocode grocers, using a cached version if available to make analysis reproducible
 # The geocoding service may be updated in the future and give different results
-if(file.exists("data/grocers_geocode_2020-10-02.csv") & use_repo_data){
-  gctable <- read.csv("data/grocers_geocode_2020-10-02.csv")
+cached_grocers = "data/grocers_geocode_2020-11-09.csv"
+if(file.exists(cached_grocers) & use_repo_data){
+  gctable <- read.csv(cached_grocers)
   failed = which(gctable$score == 0)
   message("Loaded cached geocoded grocers: ", nrow(gctable)-length(failed), "/", nrow(gctable), " have coordinates.")
   if(nrow(gctable) != nrow(food_retail_filtered)) warning("Cached geocoded table has different row count than non-geocoded table")
