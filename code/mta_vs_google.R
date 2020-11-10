@@ -67,9 +67,6 @@ subway_boro[, min(date)] # 2020-01-01
 subway_boro <- subway_boro[date >= "2020-01-29" & date <= "2020-04-30", ]
 subway_boro[, range(date)] # 2020-01-29 to 2020-04-30
 
-# center relative ration on 0
-subway_boro[, rel_usage := usage.median.ratio - 1]
-
 # Join MTA and Google ####
 boro_cnty = data.table(place = c("Bronx", "Brooklyn", "Manhattan", "Queens", "Staten Island"), 
                        county = c("Bronx County", "Kings County", "New York County", "Queens County", "Richmond County"))
@@ -80,8 +77,7 @@ setkey(subway_boro, date, county)
 setkey(gacts, date, county)
 comp = gacts[subway_boro]
 comp = comp[!is.na(county)]
-comp = comp[, .(place, date, Google_Mobility = transit_stns/100, MTA_Turnstiles = rel_usage)]
-setnames(comp, c("MTA_Turnstiles", "Google_Mobility"), c("MTA Turnstiles", "Google Mobility"))
+comp = comp[, .(place, date, `Google Mobility` = (transit_stns/100)+1, `MTA Turnstiles` = usage.median.ratio)]
 
 # table that allows more recent records from one source than the other
 comp_long = melt.data.table(comp[date >= as.Date("2020-03-01")], id.vars = c("date", "place"), 
@@ -92,17 +88,22 @@ comp_long = melt.data.table(comp[date >= as.Date("2020-03-01")], id.vars = c("da
 first_date = comp_long[, min(date)]
 last_date = comp_long[, max(date)]
 
-# Dashed lines for Google, solid for MTA, do not exclude Staten Island
+# Dashed lines for Google, solid for MTA
 mobplot <- ggplot(comp_long[!is.na(relative_use)], 
        aes(x = date, y = relative_use, linetype = source, col = place)) + 
   theme_bw() + 
   geom_line() + scale_color_discrete(name = "Borough") + scale_linetype_discrete(name = "Data Source") + 
-  xlab("") + ylab("relative to baseline") + 
-  scale_x_date(breaks = seq.Date(comp_long[, min(date)], comp_long[, max(date)], by = 7), 
-               limits = c(first_date, last_date)) + ggtitle("Transit Trends")
+  xlab("") + 
+  scale_y_continuous("Relative to Baseline (%)", breaks = c(0.25, 0.5, 0.75, 1), 
+                     labels = scales::percent) + 
+  scale_x_date(date_minor_breaks = "1 week", limits = c(first_date, last_date + 1), 
+               breaks = as.Date(c("2020-03-01", "2020-04-01", "2020-05-01")),
+               labels = scales::date_format("%b")) + 
+  theme(legend.title = element_text(face = "bold", size = 8), legend.position = c(0.73, 0.75),
+        legend.spacing = unit(1, "points"), legend.box="horizontal") 
 
 plotres = 300
 agg_png(filename = here("figures", paste0("sfig_mobility_", Sys.Date(),".png")), 
-        width = plotres*6, height = plotres*4, scaling = 2.3)
+        width = plotres*6, height = plotres*4, scaling = 3.3)
 print(mobplot)
 dev.off()
