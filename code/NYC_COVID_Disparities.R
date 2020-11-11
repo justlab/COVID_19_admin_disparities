@@ -66,8 +66,8 @@ export.figs = TRUE #change to true if you would like to save out figures
 # unless 1. set by an environment variable:
 data.root = Sys.getenv("COVID_DATA")
 # or 2. set with an alternative path here:
-if (data.root == "") data.root = "data"
-if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
+if (data.root == "") data.root = here("data")
+if (data.root == here("data") & !dir.exists(data.root)) dir.create(here("data"))
 print(paste("data being downloaded into directory", dQuote(data.root)))
 if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == "") message("MTA turnstile processing in a temp directory. To cache persistently set an environment variable 'MTA_TURNSTILE_DATA_DIR'. See also ?usethis::edit_r_environ()")
 
@@ -537,7 +537,7 @@ nrow(food_retail_filtered) # 1037
 
 # Geocode grocers, using a cached version if available to make analysis reproducible
 # The geocoding service may be updated in the future and give different results
-cached_grocers = "data/grocers_geocode_2020-11-09.csv"
+cached_grocers = here("data/grocers_geocode_2020-11-09.csv")
 if(file.exists(cached_grocers) & use_repo_data){
   gctable <- read.csv(cached_grocers)
   failed = which(gctable$score == 0)
@@ -559,7 +559,7 @@ if(file.exists(cached_grocers) & use_repo_data){
   gctable = bind_rows(geocodes)
   message("Geocoded ", nrow(food_retail_filtered)-length(failed), "/", nrow(food_retail_filtered), 
           " grocers in ", round(as.numeric(tdiff),1), " ", attributes(tdiff)$units)
-  write.csv(gctable, paste0("data/grocers_geocode_", Sys.Date(), ".csv"))
+  write.csv(gctable, here(paste0("data/grocers_geocode_", Sys.Date(), ".csv")))
 }
 
 # Count grocers by tract
