@@ -10,7 +10,6 @@ library(ragg) # requires packageVersion("StanHeaders") >= '2.21.0.6'
 library(rstan)
 library(drc)
 library(spdep)
-# library(mgcv)
 library(broom)
 library(MASS)
 library(spatialreg)
@@ -31,8 +30,6 @@ library(DHARMa)
 library(kableExtra)
 #Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
-options(mc.cores = parallel::detectCores())
-rstan_options(auto_write = TRUE)
 
 #### SESSION CONFIGURATIONS ####
 
