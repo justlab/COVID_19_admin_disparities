@@ -1754,6 +1754,9 @@ sfig6 <- ggplot() +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 sfig6
 
+# Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
+source(here("code/mta_vs_google.R"))
+mobplot
 
 #### Appendix
 Sys.time()

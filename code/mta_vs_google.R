@@ -1,5 +1,7 @@
 # Compare MTA turnstile usage vs. Google mobility trends 
 
+message("Running comparison of MTA turnstile data with Google mobility reports...")
+
 # Packages ####
 library(Just.universal)
 library(data.table)
@@ -9,26 +11,6 @@ library(zip)
 library(here)
 library(readr)
 library(ragg)
-
-here() # current working directory
-if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){ # set up default download location for MTA turnstile data
-  mta_dir = here("data/mta_turnstile")
-  if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
-  Sys.setenv(MTA_TURNSTILE_DATA_DIR = here("data/mta_turnstile")) 
-}
-library(MTA.turnstile)
-
-# data will default to a subfolder "data/" within working directory
-# unless 1. set by an environment variable:
-data.root = Sys.getenv("COVID_DATA")
-# or 2. set with an alternative path here:
-if (data.root == "") data.root = "data"
-if (data.root == "data" & !dir.exists(data.root)) dir.create("data")
-print(paste("data being downloaded into directory", dQuote(data.root)))
-
-download = function(url, to, f, ...){
-  f(download.update.meta(url, file.path(data.root, "downloads"), to),
-    ...)}
 
 # Get Google mobility data #### 
 google_data <- download(url = "https://www.gstatic.com/covid19/mobility/Region_Mobility_Report_CSVs.zip",
@@ -57,15 +39,16 @@ google_data <- download(url = "https://www.gstatic.com/covid19/mobility/Region_M
                           message("The downloaded copy of the Google mobility data was last updated ", update_date)
                           gacts
                         })
+
 # Subset Google data to time range of interest
 gacts <- google_data[date >= "2020-01-29" & date <= "2020-04-30", ]
-gacts[, min(date)] # 2020-02-15
+#gacts[, min(date)] # 2020-02-15
 
 # Load subway data ####
 subway_boro <- relative.subway.usage(2020L, "boro")
-subway_boro[, min(date)] # 2020-01-01
+#subway_boro[, min(date)] # 2020-01-01
 subway_boro <- subway_boro[date >= "2020-01-29" & date <= "2020-04-30", ]
-subway_boro[, range(date)] # 2020-01-29 to 2020-04-30
+#subway_boro[, range(date)] # 2020-01-29 to 2020-04-30
 
 # Join MTA and Google ####
 boro_cnty = data.table(place = c("Bronx", "Brooklyn", "Manhattan", "Queens", "Staten Island"), 
@@ -88,7 +71,7 @@ comp_long = melt.data.table(comp[date >= as.Date("2020-03-01")], id.vars = c("da
 first_date = comp_long[, min(date)]
 last_date = comp_long[, max(date)]
 
-# Dashed lines for Google, solid for MTA
+# Supplmental Figure 9
 mobplot <- ggplot(comp_long[!is.na(relative_use)], 
        aes(x = date, y = relative_use, linetype = source, col = place)) + 
   theme_bw() + 
@@ -103,7 +86,9 @@ mobplot <- ggplot(comp_long[!is.na(relative_use)],
         legend.spacing = unit(1, "points"), legend.box="horizontal") 
 
 plotres = 300
-agg_png(filename = here("figures", paste0("sfig_mobility_", Sys.Date(),".png")), 
+fig_outpath = file.path(fig.path, paste0("sfig_mobility_", Sys.Date(),".png"))
+message("Writing ", fig_outpath)
+agg_png(filename = fig_outpath, 
         width = plotres*6, height = plotres*4, scaling = 3.3)
 print(mobplot)
 dev.off()
