@@ -1,4 +1,4 @@
-#CRAN packages:
+# CRAN packages:
 library(tidyverse)
 library(sf)
 library(lubridate)
@@ -6,7 +6,7 @@ library(tidycensus)
 library(ggExtra)
 library(ggridges)
 library(ggsn)
-library(ragg) # requires packageVersion("StanHeaders") >= '2.21.0.6'
+library(ragg) 
 library(rstan)
 library(drc)
 library(spdep)
@@ -28,48 +28,54 @@ library(httr)
 library(jsonlite)
 library(DHARMa)
 library(kableExtra)
-#Github packages available via remotes::install_github("justlab/Just_universal") and remotes::install_github("justlab/MTA_turnstile")
+# Github packages available via: 
+#   remotes::install_github("justlab/Just_universal")  
+#   remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 
-#### SESSION CONFIGURATIONS ####
-
-# Get some data from the git repository rather than downloading from original
-#   source, to avoid changes in model results due to updated data
-use_repo_data = TRUE
-
-here() # current working directory
-if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){ # set up default download location for MTA turnstile data
-  mta_dir = here("data/mta_turnstile")
-  if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
-  Sys.setenv(MTA_TURNSTILE_DATA_DIR = here("data/mta_turnstile"))#"/data-coco/MTA_turnstile"
-}
-library(MTA.turnstile)
-
-if(!dir.exists(here("figures"))) dir.create(here("figures"))
-pairmemo.dir = here("data/pairmemo")
-dir.create(pairmemo.dir, showWarnings = F)
-pm = function(...) pairmemo(
-    directory = pairmemo.dir,
-    n.frame = 2,
-    ...)
-
-##To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
-#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
-if(Sys.getenv("CENSUS_API_KEY")=="") "Census API Key Missing"
-
-export.figs = TRUE #change to true if you would like to save out figures 
+#### SESSION CONFIGURATION ####
+options(dplyr.summarise.inform=FALSE)
 
 # data will default to a subfolder "data/" within working directory
 # unless 1. set by an environment variable:
 data.root = Sys.getenv("COVID_DATA")
 # or 2. set with an alternative path here:
 if (data.root == "") data.root = here("data")
-if (data.root == here("data") & !dir.exists(data.root)) dir.create(here("data"))
+if (!dir.exists(data.root)) dir.create(data.root)
 print(paste("data being downloaded into directory", dQuote(data.root)))
-if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == "") message("MTA turnstile processing in a temp directory. To cache persistently set an environment variable 'MTA_TURNSTILE_DATA_DIR'. See also ?usethis::edit_r_environ()")
 
+# Get some data from the git repository rather than downloading from original
+#   source, to avoid changes in model results due to updated data
+use_repo_data = TRUE
 
-##### FUNCTIONS ####
+if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){ 
+  # set up default download location for MTA turnstile data
+  mta_dir = file.path(data.root, "mta_turnstile")
+  if(!dir.exists(mta_dir)) dir.create(mta_dir, recursive = TRUE)
+  Sys.setenv(MTA_TURNSTILE_DATA_DIR = mta_dir)
+}
+library(MTA.turnstile)
+
+# output path for figures
+fig.path = here("figures")
+if(!dir.exists(fig.path)) dir.create(fig.path)
+
+export.figs = TRUE 
+if(export.figs) message("Saving figures to:\n ", fig.path) else message("Not saving figures")
+
+# pairmemo function cache
+pairmemo.dir = file.path(data.root, "pairmemo")
+dir.create(pairmemo.dir, showWarnings = F)
+pm = function(...) pairmemo(
+    directory = pairmemo.dir,
+    n.frame = 2,
+    ...)
+
+# To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
+#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
+if(Sys.getenv("CENSUS_API_KEY")=="") warning("Census API Key Missing")
+
+#### Functions ####
 
 read_w_filenames <- function(flnm) {
   read_csv(flnm) %>%
@@ -101,12 +107,14 @@ extract_waic <- function (stanfit){
               p_loo = total["p_loo"]))
 }
 
+# Download a file, update metadata records, and load it with function `f`
+# File metadata is stored in a sqlite file, by default in data/downloads/meta.sqlite
 download = function(url, to, f, ...){
     f(download.update.meta(url, file.path(data.root, "downloads"), to),
         ...)
 }
 
-##### Load Data #####
+#### Load Data ####
 
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
 pm(fst = T,
@@ -122,17 +130,17 @@ get.Pluto <- function() download(
 Pluto <- as.data.frame(get.Pluto())
 
 
-{if (file.exists(here("data", "Bldg_Footprints.qs")))
-    Bldg_Footprints <- qread(here("data", "Bldg_Footprints.qs"))
-else {
-   Bldg_Footprints <- download(
-      # https://data.cityofnewyork.us/Housing-Development/Building-Footprints/nqwf-w8eh
-        "https://data.cityofnewyork.us/api/geospatial/nqwf-w8eh?method=export&format=Shapefile",
-        "building_footprints.zip",
-        function(p)
-            st_read(paste0("/vsizip/", p)))
-    qsave(Bldg_Footprints, here("data", "Bldg_Footprints.qs"))
-}}
+if (file.exists(file.path(data.root, "Bldg_Footprints.qs"))) {
+    Bldg_Footprints <- qread(file.path(data.root, "Bldg_Footprints.qs"))
+} else {
+  Bldg_Footprints <- download(
+    # https://data.cityofnewyork.us/Housing-Development/Building-Footprints/nqwf-w8eh
+    "https://data.cityofnewyork.us/api/geospatial/nqwf-w8eh?method=export&format=Shapefile",
+    "building_footprints.zip",
+    function(p)
+      st_read(paste0("/vsizip/", p)))
+  qsave(Bldg_Footprints, file.path(data.root, "Bldg_Footprints.qs"))
+}
 
 ZCTA_by_boro <- download(
     "https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm",
@@ -154,17 +162,16 @@ ZCTA_test_download <- download(
   identity
 )
 
-#Download testing data 
+# Download COVID-19 testing data 
 ZCTA_test_series <- ZCTA_test_download %>% 
   map_df(~read_w_filenames(.)) %>%
   mutate(date = as.Date(str_extract(filename, "[:digit:]{4}-[:digit:]{2}-[:digit:]{2}"))) %>%
   dplyr::select(-filename)
 
-
-##Subway ridership data
+# Subway ridership data
 Subway_ridership_by_UHF <- relative.subway.usage(2020L, "nhood")
 
-#UHF definitions by zip codes
+# UHF definitions by zip codes
 UHF_ZipCodes <- UHF_ZipCodes <- download(
     "http://www.infoshare.org/misc/UHF.pdf",
     "uhf_zips.pdf",
@@ -175,7 +182,7 @@ UHF_ZipCodes <- UHF_ZipCodes <- download(
             data.frame(code = x[i, 2], name = x[i, 3], zip = as.integer(
                 str_extract_all(x[i, 4], "\\b\\d{5}\\b")[[1]]))))})
 
-#UHF shapefile 
+# UHF shapefile 
 UHF_shp <- download(
     "https://www1.nyc.gov/assets/doh/downloads/zip/uhf42_dohmh_2009.zip",
     "nyc_uhf_nhoods_shapefile.zip",
@@ -193,16 +200,16 @@ NYC_basemap_shp <- download(
   } 
 )
 
-#DOHMH MODZCTA Shapefile
+# DOHMH MODZCTA Shapefile
 MODZCTA_NYC_shp <- download(
   "https://data.cityofnewyork.us/api/geospatial/pri4-ifjk?method=export&format=Shapefile",
   "Modified Zip Code Tabulation Areas (MODZCTA).zip", 
   function(p) read_sf(paste0("/vsizip/", p))
 )
 
-#Food outlets 
+# Food outlets 
 if(use_repo_data){
-  food_retail <- read_csv(here("data/retail_food_stores_2019-06-13.csv"))
+  food_retail <- read_csv(file.path(data.root, "retail_food_stores_2019-06-13.csv"))
 } else {
   food_retail <- download(
       "https://data.ny.gov/api/views/9a8c-vfzj/rows.csv",
@@ -216,26 +223,24 @@ deaths_by23May2020_by_zcta <- download(
   "2020-05-23_data-by-modzcta.csv",
   read_csv
 )
+
 # download MODZCTA to ZCTA crosswalk, current version from repo
 modzcta_to_zcta <- download(
   "https://raw.githubusercontent.com/nychealth/coronavirus-data/master/Geography-resources/ZCTA-to-MODZCTA.csv",
   "ZCTA-to-MODZCTA.csv",
   read_csv
 )
+modzcta_to_zcta1 <- modzcta_to_zcta %>% mutate(ZCTA = as.character(ZCTA))
+modzcta_to_zcta2 <- modzcta_to_zcta1 %>% mutate(MODZCTA = as.character(MODZCTA))
+MODZCTAs_in_NYC <- as.character(unique(ZCTA_test_series$MODZCTA))
+ZCTAs_in_NYC <- as.character(unique(modzcta_to_zcta$ZCTA))
 
 # download ZIP to Tract crosswalk from HUD
 zip_to_tract <- download( 
   "https://www.huduser.gov/portal/datasets/usps/ZIP_TRACT_062020.xlsx",
   "ZIP_TRACT_062020.xlsx",
-  function(p) read_excel(path = p, col_types = c("text", "text", "numeric", "skip", "skip", "skip"))
-) #FIX WARNINGS
-
-
-modzcta_to_zcta1 <- modzcta_to_zcta %>% mutate(ZCTA = as.character(ZCTA))
-modzcta_to_zcta2 <- modzcta_to_zcta1 %>% mutate(MODZCTA = as.character(MODZCTA))
-
-MODZCTAs_in_NYC <- as.character(unique(ZCTA_test_series$MODZCTA))
-ZCTAs_in_NYC <- as.character(unique(modzcta_to_zcta$ZCTA))
+  function(p) suppressWarnings(read_excel(path = p, col_types = c("text", "text", "numeric", "skip", "skip", "skip")))
+) 
 
 # Block to ZCTA and County crosswalk for NY
 ny_xwalk <- download("https://lehd.ces.census.gov/data/lodes/LODES7/ny/ny_xwalk.csv.gz",
@@ -251,14 +256,7 @@ ny_xwalk <- download("https://lehd.ces.census.gov/data/lodes/LODES7/ny/ny_xwalk.
                      }
 )
 
-# download ZIP to Tract crosswalk from HUD
-zip_to_tract <- download(
-    "https://www.huduser.gov/portal/datasets/usps/ZIP_TRACT_062020.xlsx",
-    "ZIP_TRACT_062020.xlsx",
-    function(p) read_excel(path = p, col_types = c("text", "text", "numeric", "skip", "skip", "skip"))
-)
-
-##We have many sources of data, so these just help to combine the various data types
+# We have many sources of data, so these just help to combine the various data types
 NYC_counties1 <- c("Bronx","Kings","Queens","New York","Richmond")
 NYC_counties1_full <- c("Bronx County","Kings County","Queens County","New York County","Richmond County")
 NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","Richmond"), 
@@ -266,13 +264,13 @@ NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","
                                 full_county = c("Bronx County","Kings County","Queens County","New York County","Richmond County"),
                                 fips = c("36005", "36047", "36081", "36061", "36085"))
 
-#upload the stan code alongside the disparities code 
+# stan model script
 BWQS_stan_model <- here("code", "nb_bwqs_cov.stan") 
 
 
-####Census Data Collection and Cleaning####
+#### Census Data ####
 
-#function to pull 2010 block population for Queens & Nassau counties
+# function to pull 2010 block population for Queens & Nassau counties
 pm(get.qn.blocks <- function(){
   nassau_blk_pop <- get_decennial(geography = "block", variables = "P001001", 
                                   state = "NY", county = "Nassau", geometry = FALSE)
@@ -282,7 +280,7 @@ pm(get.qn.blocks <- function(){
     dplyr::select(GEOID, value) %>% rename("pop2010" = "value")
 })
 
-#function to pull ACS data 
+# function to pull 2018 ACS data 
 pm(acs.main <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "NY"), sf_shapes = c(TRUE, FALSE)) {
      ACS_Data <- get_acs(geography = admin_unit,
                          state = state_unit,
@@ -353,6 +351,8 @@ pm(acs.main <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "N
    })
 
 # Use 2010 block population to scale Nassau County ZCTA contribution to NYC MODZCTAs
+# This is the method used according to data dictionary at NYC Open Data:
+#   https://data.cityofnewyork.us/Health/Modified-Zip-Code-Tabulation-Areas-MODZCTA-/pri4-ifjk
 nassau_zcta_weights <- function(zcta_acs, mz_to_z, blk_to_z){
   blk_pop = get.qn.blocks()
   
@@ -387,10 +387,10 @@ nassau_zcta_weights <- function(zcta_acs, mz_to_z, blk_to_z){
   zcta_acs <- zcta_acs %>% left_join(zcta_weights, by = "GEOID") 
   varvec <- 1:ncol(zcta_acs)
   varvec <- varvec[-grep("GEOID|in_NYC_prop|medincome|median_rent", names(zcta_acs))]
-  zcta_acs <- zcta_acs %>% mutate_at(vars(varvec), ~ . * in_NYC_prop)
+  zcta_acs <- zcta_acs %>% mutate_at(vars(all_of(varvec)), ~ . * in_NYC_prop)
 }
 
-#function to clean ACS data
+# function to clean ACS data
 clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
   if(admin_unit=="zcta"){
     ACS_Data1a <- df %>%
@@ -432,7 +432,7 @@ clean_acs_data_and_derive_vars <- function(df, admin_unit = c("zcta", "tract")){
   return(ACS_Data2)
 }
 
-### Function to pull mode of transportation for our approximate of essential workers ###
+# Functions to pull mode of transportation for our approximate of essential workers
 pm(fst = T, 
    get_essential_acs <- function(admin_unit, state_unit) {
      get_acs(geography = admin_unit, #pull down the relevant categories 
@@ -498,21 +498,21 @@ acs.essential <- function(admin_unit, zcta_pop = NULL, state_unit = NULL) {
 }
 
 
-#ZCTA CENSUS DATA
+# ZCTA CENSUS DATA
 options(tigris_use_cache = TRUE)
 ACS_Data1 <- as.data.frame(acs.main("zcta", NULL, FALSE)) #download the zcta data
 ACS_Data_scaled <- nassau_zcta_weights(ACS_Data1, modzcta_to_zcta2, ny_xwalk)
 ACS_Data2 <- clean_acs_data_and_derive_vars(ACS_Data_scaled, "zcta")
 ACS_EssentialWrkr_Commute1 = as.data.frame(acs.essential("zcta", zcta_pop = ACS_Data_scaled, state_unit = NULL))
 
-
-#TRACT CENSUS DATA  
+# TRACT CENSUS DATA  
 acs_tracts <- acs.main("tract", "NY", TRUE)
 acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
 acs_tracts_commute1 = as.data.frame(acs.essential("tract", state_unit = "NY"))
 
 
-#### Identify the number of supermarkets/grocery stores per area ####
+#### Grocery stores per area ####
+
 non_supermarket_strings <- c("DELI|TOBACCO|GAS|CANDY|7 ELEVEN|7-ELEVEN|LIQUOR|ALCOHOL|BAKERY|CHOCOLATE|DUANE READE|WALGREENS|CVS|RITE AID|RAVIOLI|WINERY|WINE|BEER|CAFE|COFFEE")
 
 food_retail_filtered <- food_retail %>% 
@@ -530,15 +530,14 @@ food_retail_filtered <- food_retail %>%
     TRUE ~ 
       paste(paste(`Street Number`, `Street Name`), State, zcta, sep = ",") )
   )
-nrow(food_retail_filtered) # 1037
 
 # Geocode grocers, using a cached version if available to make analysis reproducible
 # The geocoding service may be updated in the future and give different results
-cached_grocers = here("data/grocers_geocode_2020-11-09.csv")
+cached_grocers = file.path(data.root, "grocers_geocode_2020-11-09.csv")
 if(file.exists(cached_grocers) & use_repo_data){
   gctable <- read.csv(cached_grocers)
   failed = which(gctable$score == 0)
-  message("Loaded cached geocoded grocers: ", nrow(gctable)-length(failed), "/", nrow(gctable), " have coordinates.")
+  message("Loaded cached geocoded grocers: ", nrow(gctable)-length(failed), "/", nrow(gctable), " have coordinates.") # 997/1037
   if(nrow(gctable) != nrow(food_retail_filtered)) warning("Cached geocoded table has different row count than non-geocoded table")
 } else {
   # locations are returned in crs=26918, UTM 18N NAD83
@@ -556,7 +555,7 @@ if(file.exists(cached_grocers) & use_repo_data){
   gctable = bind_rows(geocodes)
   message("Geocoded ", nrow(food_retail_filtered)-length(failed), "/", nrow(food_retail_filtered), 
           " grocers in ", round(as.numeric(tdiff),1), " ", attributes(tdiff)$units)
-  write.csv(gctable, here(paste0("data/grocers_geocode_", Sys.Date(), ".csv")))
+  write.csv(gctable, paste0(data.root, "/grocers_geocode_", Sys.Date(), ".csv"))
 }
 
 # Count grocers by tract
@@ -567,28 +566,27 @@ tract_grocers = suppressWarnings(st_intersection(tractSF, grocerSF)) %>%
   st_set_geometry(., NULL) %>%
   group_by(GEOID) %>%
   summarise(grocers = n_distinct(`address`))
-nrow(tract_grocers) # 754
-sum(tract_grocers$grocers) # 997
+#nrow(tract_grocers) # 749
+#sum(tract_grocers$grocers) # 993
 
-#Count grocers by ZCTA 
+# Count grocers by ZCTA 
 zctaSF <- MODZCTA_NYC_shp %>% dplyr::select(modzcta, geometry) %>% st_transform(crs = 2263) 
 zcta_grocers <- suppressWarnings(st_intersection(zctaSF, grocerSF)) %>%
   st_set_geometry(., NULL) %>%
   group_by(modzcta) %>%
   summarise(grocers = n_distinct(`address`))
-sum(zcta_grocers$grocers) # 997
-nrow(zcta_grocers) # 172
-range(zcta_grocers$grocers) # 1, 21
+# sum(zcta_grocers$grocers) # 993
+# nrow(zcta_grocers) # 172
+# range(zcta_grocers$grocers) # 1, 21
 
-
-### Where are subway stations located? ###
+#### Subway station locations ####
 
 SubwayStation_shp <- as_tibble(turnstile()$stations) %>%
   st_as_sf(., coords = c("lon", "lat"), crs = 4269) %>%
   st_transform(., crs = 2263) %>%
   filter(!str_detect(ca, "PTH")) #removing New Jersey PATH stations
 
-### Calculate the residential area ###
+#### Residential area ####
 
 Pluto_ResOnly <- Pluto %>%
   filter(landuse>="01" & landuse<="04") %>%
@@ -597,7 +595,7 @@ Pluto_ResOnly <- Pluto %>%
 
 ResBBLs <- as.character(Pluto_ResOnly$base_bbl)
 
-#zcta-level residential area
+# zcta-level residential area
 Res_Bldg_Footprints <- Bldg_Footprints %>%  
   st_set_geometry(., NULL) %>%
   mutate(base_bbl = as.character(base_bbl)) %>%
@@ -611,7 +609,7 @@ Res_Bldg_Footprints <- Bldg_Footprints %>%
   group_by(zcta) %>%
   summarise(total_res_volume_zcta = sum(res_volume, na.rm = TRUE)) 
 
-#tract level residential area 
+# tract-level residential area 
 Res_Bldg_Footprints2 <- Bldg_Footprints %>% 
   st_transform(crs = 2263) %>%
   suppressWarnings(st_centroid(of_largest_polygon = TRUE)) %>%
@@ -627,10 +625,11 @@ res_bldg_tract <- get.tract.res(Res_Bldg_Footprints2, tractSF)
 res_bldg_tract_sum <- st_set_geometry(res_bldg_tract, NULL) %>%
   group_by(GEOID) %>%
   summarise(total_res_volume_tract = sum(res_volume, na.rm = TRUE))
-nrow(res_bldg_tract_sum) # 2132
+#nrow(res_bldg_tract_sum) # 2132
 
 
-#### COVID Tests  ####
+#### COVID Tests ####
+
 MODZCTA_NYC_shp1 <- MODZCTA_NYC_shp %>%
   dplyr::select(modzcta, geometry) %>%
   rename("zcta" = "modzcta")
@@ -729,7 +728,7 @@ tract_vars <- tractSF %>% # uses local CRS
   dplyr::select(-pubtrans_subway_commute, -pubtrans_ferry_commute) %>%
   mutate_at(vars(starts_with("essentialworker_")), ~round((./over16total_industry1)*100, 2))
 
-#### Tract -> ZCTA weighted assignment ####
+#### Tract to ZCTA weighted assignment ####
 # Shares of residential addresses in ZCTAs by Tract are later used to select
 # representative tract-level SES values at a specified location on the ECDF
 
@@ -744,7 +743,6 @@ modzcta_to_zcta_pop <- modzcta_to_zcta_chr %>%
   ungroup() %>%
   mutate(pop_prop = total_pop1/sum_pop) %>% 
   arrange(MODZCTA)
-modzcta_to_zcta_pop
 
 # Sum ZCTA->Tract RES_RATIO weights when multiple ZCTA combine to a single MODZCTA
 modzcta_to_tract <- modzcta_to_zcta_pop %>%
@@ -777,20 +775,22 @@ tract_modzcta_pop <- modzcta_to_tract %>%
   dplyr::select(MODZCTA, TRACT, total_pop1, W_RES_RATIO)
 
 # checking for tracts with no population but res_ratio > 0
-tract_modzcta_pop %>% filter(MODZCTA == "11697") # zero pop tract no longer has res_ratio > 0
-tract_modzcta_pop %>% filter(total_pop1 == 0 & W_RES_RATIO > 0) %>% nrow() # 0
+# (not possible now that the weighted ratio uses population)
+#tract_modzcta_pop %>% filter(total_pop1 == 0 & W_RES_RATIO > 0) %>% nrow() # 0
 
 # check to make sure no MODZCTA have all zeroes for all tract res_ratios
-tract_modzcta_pop %>% group_by(MODZCTA) %>% filter(all(W_RES_RATIO == 0)) %>% nrow() # 0
-tract_modzcta_pop %>% filter(MODZCTA == "10020") # this MODZCTA doesn't exist, but the ZIP did and had all zeroes for RES_RATIO by tract
+all_zero_ratio <- tract_modzcta_pop %>% group_by(MODZCTA) %>% filter(all(W_RES_RATIO == 0))
+if(nrow(all_zero_ratio) > 0){
+  warning("The following MODZCTA have all zeroes for weighted tract residents:\n ", 
+          paste(all_zero_ratio$MODZCTA, collapse = ","))
+} 
 modzcta_to_tract2 <- dplyr::select(tract_modzcta_pop, -total_pop1)
 
-### Cleaning done --- Now for the Analysis ###
-
+### Preparation done --- Now for the Analysis ###
 
 #### Part 1: Creation of BWQS Neighborhood Infection Risk Scores ####
 
-#Step 1: Create univariate scatterplots to make sure direction of associations are consistent for all variables
+# Step 1: Create univariate scatterplots to make sure direction of associations are consistent for all variables
 ggplot(ZCTA_ACS_COVID, aes(x = testing_ratio, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") #covariate
 ggplot(ZCTA_ACS_COVID, aes(x = one_over_medincome, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
 ggplot(ZCTA_ACS_COVID, aes(x = not_insured, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
@@ -803,12 +803,12 @@ ggplot(ZCTA_ACS_COVID, aes(x = avg_hhold_size, y = pos_per_100000)) + geom_point
 ggplot(ZCTA_ACS_COVID, aes(x = essentialworker_drove, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
 ggplot(ZCTA_ACS_COVID, aes(x = essentialworker_pubtrans, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
 
-  
+
 SES_vars <- names(ZCTA_ACS_COVID %>% dplyr::select(one_over_medincome, not_insured, one_over_grocers_per_1000, unemployed, 
                                                     not_quarantined_jobs, essentialworker_pubtrans, essentialworker_drove, 
                                                     didnot_workhome_commute, res_vol_popdensity, avg_hhold_size))
 
-#Step 2a: Examine relationships between explanatory variables to make sure nothing >0.9 correlation, as this could bias BWQS
+# Step 2a: Examine relationships between explanatory variables to make sure nothing >0.9 correlation, as this could bias BWQS
 Cors_SESVars <- cor(x = ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)), method = "kendall")
 Cors_SESVars1 <- as.data.frame(Cors_SESVars)
 Cors_SESVars1$var1 <- row.names(Cors_SESVars1)
@@ -819,7 +819,7 @@ Cors_SESVars2 %>% arrange(desc(correlation)) %>% distinct(correlation, .keep_all
 
 corrplot(Cors_SESVars, p.mat = Cors_SESVars, insig = "p-value", type = "lower", sig.level = -1, tl.col = "black", tl.srt = 45)
 
-## Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
+# Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
 bind_cols(Variables = SES_vars,
           
         ZCTA_ACS_COVID %>%
@@ -839,7 +839,7 @@ bind_cols(Variables = SES_vars,
          `p value` = as.character(ifelse(V1...3 < 0.0001, "< 0.0001", round(V1...3, 3))),) %>%
   dplyr::select(-V1...2, -V1...3) 
 
-#Step 3: Prepare data for BWQS and pass to stan for model fitting 
+# Step 3: Prepare data for BWQS and pass to stan for model fitting 
 pm(fit_BWQS_model <- function(data_list, stan_model_path){
   fitted_model <- stan(
     file = stan_model_path,
@@ -966,9 +966,9 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
 fig2
-if(export.figs) ggsave(fig2, filename = here("figures", paste0("fig2", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 8)
+if(export.figs) ggsave(fig2, filename = file.path(fig.path, paste0("fig2", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 8)
 
-# Step 4: Construct the summative COVID-19 disparity index value for each ZCTA
+# Step 4: Construct the summative COVID-19 inequity index value for each ZCTA
 # Use the variable-specific weight on the quantiled splits to create a 10 point ZCTA-level infection risk score  
 BWQS_weights <- as.numeric(summary(m1)$summary[(length(vars)-length(SES_vars) + 1):number_of_coefficients,c(1)])
 
@@ -1007,9 +1007,9 @@ ggplot(data.frame(BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_C
 # BWQS is correlated with testing_ratio
 cor.test(BWQS_index$BWQS_index, ZCTA_ACS_COVID$testing_ratio, method = "spearman")  
 
-# Visualize the non-linear relationship between infection rate and test_ratio (not adjusted for social disparities)
+# Visualize the non-linear relationship between infection rate and test_ratio (not adjusted for social inequity)
 # infections versus testing ratio with smoothers
-ggplot(data.frame(y, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, y)) + geom_point() +
+ggplot(data.frame(y = ZCTA_ACS_COVID$pos_per_100000, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, y)) + geom_point() +
   ylab("infections per 100,000") +
   geom_smooth(color = "red", formula = y ~ x, method = "glm.nb") +
   stat_smooth(color = "green", method = "gam", formula = y ~ s(x), method.args = list(family = "nb"), se = F) +
@@ -1043,7 +1043,7 @@ BWQS_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, BWQS_pred_
 BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", margins = "both", xparams = list(binwidth = 1))
 BWQS_scatter
 if(export.figs) {
-  png(filename = here("figures", paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
+  png(filename = file.path(fig.path, paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
   print(BWQS_scatter)
   dev.off()
 }
@@ -1060,13 +1060,12 @@ testing_scatter <- ggplot(data.frame(BWQS_index, y = m1data$data_list$y, tests_p
 testing_scatter <- ggExtra::ggMarginal(testing_scatter, type = "histogram", xparams = list(binwidth = 0.005), yparams = list(binwidth = 200))
 testing_scatter
 if(export.figs) {
-  png(filename = here("figures", paste0("Sfig2_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
+  png(filename = file.path(fig.path, paste0("Sfig2_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
   print(testing_scatter)
   dev.off()
 }
 
-
-#Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
+# Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
 
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>%
   bind_cols(., BWQS_index)
@@ -1095,9 +1094,8 @@ fig3a <- ggplot(ZCTA_BWQS_COVID_shp) +
         axis.title.y = element_blank(),
         axis.title.x = element_blank())
 fig3a
-if(export.figs) ggsave(plot = fig3a, filename = here("figures", paste0("fig3a","_",Sys.Date(),".png")), dpi = 600, device = "png", width = 4, height = 3.7)
 
-#Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
+# Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data_scaled %>% 
   dplyr::select(GEOID, ends_with("_raceethnic"), total_pop1) %>%
   left_join(., modzcta_to_zcta1, by = c("GEOID" = "ZCTA")) %>%
@@ -1138,7 +1136,7 @@ fig4 <- ggplot(Demographics_for_ridges,
     scale = 0.95,
     stat ="density") 
 fig4
-if(export.figs) ggsave(plot = fig4, filename = here("figures", paste0("fig4","_",Sys.Date(),".png")), dpi = 400, device = "png", width = 8, height = 5)
+if(export.figs) ggsave(plot = fig4, filename = file.path(fig.path, paste0("fig4","_",Sys.Date(),".png")), dpi = 400, device = "png", width = 8, height = 5)
 
 Below_25th_zctas <- ZCTA_BQWS %>%
   filter(BWQS_index<quantile(BWQS_index, .25))
@@ -1149,7 +1147,6 @@ Race_Ethncity_below25th <- Demographics %>%
   summarise_all(funs(sum(.))) %>%
   mutate_at(vars(ends_with("_raceethnic")), funs(round((./total_pop1)*100, 2))) %>%
   mutate(Group = "Below 25th percentile BWQS")
-
 
 Between_25thand75th_zctas <- ZCTA_BQWS %>%
   filter(BWQS_index>quantile(BWQS_index, .25) & BWQS_index<quantile(BWQS_index, .75))
@@ -1209,7 +1206,7 @@ sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
         axis.text.x = element_text(size = 16, color = "black"), 
         axis.title.x = element_blank()) 
 sfig2
-if(export.figs) ggsave(sfig2, filename = here("figures", paste0("sfig2","_",Sys.Date(),".png")), device = "png", dpi = 500, width = 12, height = 6)
+if(export.figs) ggsave(sfig2, filename = file.path(fig.path, paste0("sfig2","_",Sys.Date(),".png")), device = "png", dpi = 500, width = 12, height = 6)
 
 #### BWQS by Tract ####
 
@@ -1242,7 +1239,7 @@ get_tract_vars_by_zcta <- function(tract_vars, modzcta_tract_crosswalk, whichq){
   ses_zcta %>% rename_with(~ gsub("rename", qname, .x))
 }
 
-# get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "q3")
+# Select median tract values by MODZCTA, weighted by residential address share and population density by tract
 SES_zcta_median <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "median")
 SES_vars_median = names(SES_zcta_median)[names(SES_zcta_median) != "MODZCTA"]
 
@@ -1251,10 +1248,11 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
   dplyr::select(zcta, pos_per_100000, testing_ratio) %>%
   left_join(SES_zcta_median, by = c("zcta" = "MODZCTA"))
 
-#BWQS using median at the tract level 
+# BWQS using median at the tract level 
 m2data_median <- prep_BWQS_data(SES_zcta_median_testing, SES_vars_median)
 m2_median <- fit_BWQS_model(data_list = m2data_median$data_list, stan_model_path = BWQS_stan_model)
 
+# Select third quartile tract values by MODZCTA, weighted by residential address share and population density by tract
 SES_zcta_3q <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "3q")
 SES_vars_3q = names(SES_zcta_3q)[names(SES_zcta_3q) != "MODZCTA"]
 SES_zcta_3q_testing <- ZCTA_ACS_COVID %>%
@@ -1283,8 +1281,7 @@ bind_rows(Summarize_BWQS_performance(m1, SES_zcta_median_testing),
 )
 
 
-
-#### Step 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
+#### Part 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
 
 UHF_ZipCodes1 <- UHF_ZipCodes %>%
   mutate(zcta = as.character(zip),
@@ -1325,8 +1322,8 @@ Mean_Ridership %>%
 fit_drm_w2.4 <- drm(usage.median.ratio ~ time_index, fct =  W2.4(), data = Mean_Ridership)
 
 # suppress warning about vector recycling in predict.drc.R
-handler <- function(w) if( any( grepl( "Recycling array of length 1 in array-vector arithmetic is deprecated.", w) ) ) 
-  invokeRestart( "muffleWarning" )
+handler <- function(w) if( any( grepl( "Recycling array of length 1 in array-vector arithmetic is deprecated.", w) ) ){
+  invokeRestart( "muffleWarning" ) } 
 
 DRM_mean_predictions <- bind_cols(Mean_Ridership,
                                   as_tibble(withCallingHandlers(predict(fit_drm_w2.4, interval = "confidence"), warning = handler ))) 
@@ -1338,9 +1335,9 @@ sfig4 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridersh
   xlab("Date") +
   ylab("Relative Subway Use (%)")
 sfig4
-if(export.figs) ggsave(sfig4, filename = here("figures", paste0("sfig4", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
+if(export.figs) ggsave(sfig4, filename = file.path(fig.path, paste0("sfig4", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
 
-#create a dataframe for the analysis 
+# create a dataframe for the analysis 
 service_changes_in_lowsubway_areas <- tibble(date = as.Date(c("2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-15", "2020-02-16", "2020-02-22", "2020-02-23", "2020-02-29", "2020-03-01", "2020-03-07", "2020-03-08", 
                                                       "2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-16", "2020-02-16")),
                                              place = c("403","403","403","403","403","403","403","403","403","403","403","403", 
@@ -1352,8 +1349,8 @@ Subway_BWQS_df <- Subway_ridership_by_UHF %>%
   group_by(place) %>%
   arrange(date) %>%
   mutate(time_index = time(date)) %>%
-  filter(!is.na(Risk) & date != "2020-02-17") %>% #removing Presidents' Day national holiday 
-  anti_join(., service_changes_in_lowsubway_areas, by = c("date", "place")) %>%#removing low outliers due to service changes in low subway density areas
+  filter(!is.na(Risk) & date != "2020-02-17") %>% # removing Presidents' Day national holiday 
+  anti_join(., service_changes_in_lowsubway_areas, by = c("date", "place")) %>% # removing low outliers due to service changes in low subway density areas
   ungroup()
   
 fit_drm_all <- drm(usage.median.ratio ~ time_index, fct = W2.4(), data = Subway_BWQS_df)
@@ -1362,7 +1359,7 @@ fit_drm_interact <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W
 fit_drm_interact1 <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, separate = F) #using this for plotting -- can't get separate = T to plot correctly!
 fit_drm_risk_high <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="High")
 fit_drm_risk_low <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_df, subset = Risk=="Low")
-anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
+anova(fit_drm_all, fit_drm_interact) # comparing the mean only model to the interaction model 
 
 summary(fit_drm_interact)
 confint(fit_drm_interact)
@@ -1388,7 +1385,7 @@ fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact1, 
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
 Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
-  filter(date>"2020-02-16") %>% #subsetting for visualization
+  filter(date>"2020-02-16") %>% # subsetting for visualization
   mutate(Risk = if_else(Risk == "High", "High (above median)", "Low (below median)"))
 
 fig5 <- ggplot() + 
@@ -1403,9 +1400,9 @@ fig5 <- ggplot() +
   labs(colour="BWQS Infection Risk Index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 fig5 
-if(export.figs) ggsave(fig5, filename = here("figures", paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
+if(export.figs) ggsave(fig5, filename = file.path(fig.path, paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
 
-#which ones were dropped?
+# which UHF neighborhoods were dropped?
 included_uhf <- Subway_BWQS_df %>% distinct(UHFCODE)
 notincluded_uhf_shp <- UHF_BWQS_COVID_shp %>%
   filter(!UHFCODE %in% included_uhf$UHFCODE & 
@@ -1420,13 +1417,12 @@ sfig3 <- ggplot() +
   xlab("") + ylab("") +
   theme_bw()
 sfig3
-if(export.figs) ggsave(sfig3, filename = here("figures", paste0("sfig3", "_", Sys.Date(),".png")), dpi = 500)
-
+if(export.figs) ggsave(sfig3, filename = file.path(fig.path, paste0("sfig3", "_", Sys.Date(),".png")), dpi = 500)
 
 
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
 
-#Step 1: Create dataframes with the relevant information 
+# Step 1: Create dataframes with the relevant information 
 deaths_by23May2020_by_zcta1 <- deaths_by23May2020_by_zcta %>%
   left_join(., modzcta_to_zcta, by = c("MODIFIED_ZCTA" = "MODZCTA")) %>%
   mutate(zcta = as.character(MODIFIED_ZCTA)) %>%
@@ -1461,33 +1457,42 @@ fig3c <- ZCTA_BWQS_COVID_shp1 %>%
         plot.margin = unit(c(4,0,4,0), "pt"))
 fig3c
 
-# sfig1 <- ggarrange(fig3b, sfig1b, nrow = 1)
-# if(export.figs) ggexport(sfig1, filename = here("figures", paste0("sfig1", "_", Sys.Date(),".png")), res = 300, width = 7.3*300, height = 3.7*300)
+# Combine subfigures to make Figure 3: maps of BWQS, Tests, and Mortality by ZCTA
+fig3a_2 = fig3a + labs(tag = "A") + theme(plot.tag.position = c(0.0,0.99), plot.tag = element_text(face = "bold", size = 14))
+fig3b_2 = fig3b + labs(tag = "B") + theme(plot.tag.position = c(0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
+fig3c_2 = fig3c + labs(tag = "C") + theme(plot.tag.position = c(-0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
 
+plotres = 300
+agg_png(filename = file.path(fig.path, paste0("fig3_combined_", Sys.Date(), "_ragg.png")), 
+        width = plotres*4.25, height = plotres*6, scaling = 2)
+grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1), 
+             arrangeGrob(fig3b_2, fig3c_2, ncol = 2, nrow = 1),
+             nrow = 2, ncol = 1, heights = c(1.9,1))
+dev.off()
 
-#Step 2: Run negative binomial model with spatial filtering  
+# Step 2: Run negative binomial model with spatial filtering  
 
-#Step 2a: Identify the neighbor relationships 
+# Step 2a: Identify the neighbor relationships 
 spdat.sens <- as_Spatial(ZCTA_BWQS_COVID_shp1)
 ny.nb6 <- knearneigh(sp::coordinates(spdat.sens), k=6)
 ny.nb6 <- knn2nb(ny.nb6)
 ny.nb6 <- make.sym.nb(ny.nb6)
 ny.wt6 <- nb2listw(ny.nb6, style="W")
 
-#Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
+# Step 2b: Fit the model to identify the component of the data with substantial spatial autocorrelation
 fit.nb.ny.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index, spdat.sens)
 lm.morantest(fit.nb.ny.sens, listw = ny.wt6)
 me.fit.sens <- spatialreg::ME(deaths_count~offset(log(total_pop1))+BWQS_index,
                               spdat.sens@data, family=negative.binomial(fit.nb.ny.sens$theta), listw = ny.wt6, verbose=T, alpha=.1, nsim = 999)
 
-#Step 2c: Pull out these fits and visualize the autocorrelation
+# Step 2c: Pull out these fits and visualize the autocorrelation
 fits.sens <- data.frame(fitted(me.fit.sens))
 spdat.sens$me16 <- fits.sens$vec16
 spdat.sens$me23 <- fits.sens$vec23
 spplot(spdat.sens, "me16", at=quantile(spdat.sens$me16, p=seq(0,1,length.out = 7)))
 spplot(spdat.sens, "me23", at=quantile(spdat.sens$me23, p=seq(0,1,length.out = 7)))
 
-#Step 2d: Include the fits in our regression model as an additional parameter
+# Step 2d: Include the fits in our regression model as an additional parameter
 clean.nb.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index+fitted(me.fit.sens), spdat.sens@data)
 tidy(clean.nb.sens) %>% mutate(estimate_exp = exp(estimate))
 as_tibble(confint(clean.nb.sens), rownames = "vars")%>% mutate_at(vars(2:3), .funs = list(~exp(.)))
@@ -1497,23 +1502,9 @@ spplot(spdat.sens, "nb_residuals", at=quantile(spdat.sens$nb_residuals, p=seq(0,
 ggplot() + geom_sf(data = st_as_sf(spdat.sens),aes(fill = cut_width(nb_residuals, width = 1))) + labs(fill = "Residuals\n(Standard Deviations)")
 
 
-# Combine subfigures to make Figure 3: maps of BWQS, Tests, and Mortality by ZCTA
-fig3a_2 = fig3a + labs(tag = "A") + theme(plot.tag.position = c(0.0,0.99), plot.tag = element_text(face = "bold", size = 14))
-fig3b_2 = fig3b + labs(tag = "B") + theme(plot.tag.position = c(0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
-fig3c_2 = fig3c + labs(tag = "C") + theme(plot.tag.position = c(-0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
+#### Sensitivity Analyses ####
 
-plotres = 300
-agg_png(filename = here("figures", paste0("fig3_combined_2_", Sys.Date(), "_ragg.png")), 
-        width = plotres*4.25, height = plotres*6, scaling = 2)
-grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1), 
-             arrangeGrob(fig3b_2, fig3c_2, ncol = 2, nrow = 1),
-             nrow = 2, ncol = 1, heights = c(1.9,1))
-dev.off()
-
-
-####  Sensitivity Analyses  ####
-
-## half-cauchy prior for overdispersion parameter
+# half-Cauchy prior for overdispersion parameter
 BWQS_NB_halfcauchy_stan_model <- here("code", "nb_bwqs_halfcauchy.stan") 
 m1_halfcauchy <- fit_BWQS_model(m1data$data_list, BWQS_NB_halfcauchy_stan_model)
 # beta1 effect estimate using half-cauchy prior for overdispersion
@@ -1522,8 +1513,8 @@ exp(summary(m1_halfcauchy)$summary[3,c(1,4,8)])
 exp(summary(m1)$summary[3,c(1,4,8)])
 # no meaningful difference in effect estimate or credible interval!
 
-##BWQS weights -- stability of the rankings 
-View(as_tibble(extract(m1, c("W[1]","W[2]", "W[3]", "W[4]", "W[5]", "W[6]", "W[7]", "W[8]", "W[9]", "W[10]"))) %>%
+# BWQS weights -- stability of the rankings 
+as_tibble(extract(m1, c("W[1]","W[2]", "W[3]", "W[4]", "W[5]", "W[6]", "W[7]", "W[8]", "W[9]", "W[10]"))) %>%
   rownames_to_column("iteration") %>%
   gather(weight, value, "W[1]":"W[10]") %>%
   group_by(iteration) %>%
@@ -1531,26 +1522,26 @@ View(as_tibble(extract(m1, c("W[1]","W[2]", "W[3]", "W[4]", "W[5]", "W[6]", "W[7
   ungroup() %>%
     group_by(weight) %>%
     dplyr::summarise(times_largest_weight = n()) %>%
-    mutate(pct_largest_weight = round((times_largest_weight/1750)*100, 2)))
+    mutate(pct_largest_weight = round((times_largest_weight/1750)*100, 2))
 
 
-##Just using proportion uninsured and median income
-names(ZCTA_ACS_COVID)
+# using essential workers, testing ratio, and median income
 glm_esstl_and_income <- glm.nb(pos_per_100000 ~ not_quarantined_jobs + medincome + testing_ratio, data = ZCTA_ACS_COVID)
+broom::tidy(glm_esstl_and_income)
+plot(glm_esstl_and_income)
+enframe(predict(glm_esstl_and_income)) %>% mutate(value = exp(value))
+
+# Just using proportion uninsured and median income
+glm_insurance_and_income <- glm.nb(pos_per_100000 ~ not_insured + medincome, data = ZCTA_ACS_COVID)
 broom::tidy(glm_insurance_and_income)
-plot(glm_insurance_and_income)
-enframe(predict(glm_insurance_and_income)) %>% mutate(value = exp(value))
 
-summary(glm.nb(pos_per_100000 ~ not_insured + medincome, data = ZCTA_ACS_COVID))
-
-
-##PCA of social variables 
-pca_socialvars <- princomp(ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)), cor = T)
+# PCA of social variables 
 pca_socialvars <- prcomp(ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)), center = T, scale. = T)
 PC1 <- enframe(pca_socialvars$rotation[,1]) %>% arrange(desc(value)) %>% rename("label" = "name")
 
 df_for_PCA_analysis <- ZCTA_ACS_COVID %>% bind_cols(., PC1 = pca_socialvars$x[,1])
 
+# Compare BWQS ranks to Principal Components ranks
 BWQS_fits %>%
   dplyr::select(mean, label) %>%
   mutate(rank_bwqs = rank(mean)) %>%
@@ -1570,7 +1561,7 @@ Compare_Metrics <- bind_cols(ZCTA_ACS_COVID,
                              glm_esstl_and_income = enframe(predict(glm_esstl_and_income)) %>% mutate(glm_esstl_and_income = exp(value)) %>% dplyr::select(glm_esstl_and_income),
                              BWQS_index = colMeans(extract(m1,"y_new")$y_new))
 
-### comparison of RMSE and Kendall's tau metrics for three different modeling approaches
+# comparison of RMSE and Kendall's tau metrics for three different modeling approaches
 # Supplemental Table 4
 bind_rows(Compare_Metrics %>% 
             summarise_at(vars(c("BWQS_index", "glm_princomp", "glm_esstl_and_income")), 
@@ -1582,11 +1573,12 @@ bind_rows(Compare_Metrics %>%
             mutate(parameter = "RMSE"))
 
 sqrt(mean((m - o)^2))
+
 ##Examining residuals of the BWQS -- map??
 
-##Subway analyses 
+#### Subway analyses ####
 
-#Different BWQS groupings for subway analysis (<.25, .25-.75, .75)
+# Different BWQS groupings for subway analysis (<.25, .25-.75, .75)
 
 UHF_BWQS_COVID_3split_shp <- UHF_shp %>% 
   mutate(uhf = as.character(UHFCODE)) %>%
@@ -1626,7 +1618,7 @@ confint(fit_drm_risk_3split_high)
 confint(fit_drm_risk_3split_mid)
 confint(fit_drm_risk_3split_low)
 
-#b is not actually a slope - but a scaling factor that needs to be transformed into the slope
+# b is not actually a slope - but a scaling factor that needs to be transformed into the slope
 slopes_3split <- as_tibble(coef(fit_drm_risk_3split_high), rownames = "vars") %>%
   bind_cols(BWQS_risk = "high") %>%
   bind_rows(as_tibble(coef(fit_drm_risk_3split_mid), rownames = "vars") %>% bind_cols(BWQS_risk = "mid")) %>%
@@ -1658,12 +1650,12 @@ Subway_BWQS_3split_df1 <- bind_cols(Subway_BWQS_3split_df %>% arrange(Risk, date
 
 
 Subway_BWQS_3split_df2 <- Subway_BWQS_3split_df1 %>%
-  filter(date>"2020-02-16") %>% #subsetting for visualization
+  filter(date>"2020-02-16") %>% # subsetting for visualization
   mutate(Risk = factor(if_else(Risk == "High", "High (≥ 75%ile)", 
                         if_else(Risk=="Mid", "Mid (IQR)", "Low (≤ 25%ile)")),
                        levels = c("High (≥ 75%ile)", "Mid (IQR)", "Low (≤ 25%ile)")))
-#distinct(date, .keep_all = T)
 
+# Supplementary Figure 5
 sfig5 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_3split_df2, aes(x = date, y = usage.median.ratio, color = as.factor(Risk)), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
   geom_ribbon(data = subset(Subway_BWQS_3split_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
@@ -1678,12 +1670,11 @@ sfig5 <- ggplot() +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 sfig5 
 
-
-#ZCTA level BWQS for subway 
+# ZCTA level BWQS for subway 
 Subway_ridership_by_ZCTA <- relative.subway.usage(2020, by = "zcta")
 
-##There are clearly some higher outliers that need to be removed at the zcta level ##
-### Remove the zctas associated with the uhfs below
+# There are clearly some higher outliers that need to be removed at the zcta level 
+# Remove the zctas associated with the uhfs below
 
 high_april_bronx_subway <- tibble(date = as.Date(c("2020-04-04", "2020-04-05", "2020-04-11", "2020-04-12", "2020-04-18", "2020-04-19", "2020-04-25", "2020-04-26")),
                                   place = c("10469", "10469","10469","10469","10469","10469","10469","10469"))
@@ -1711,7 +1702,7 @@ summary(fit_drm_risk_3split_zcta_mid)
 summary(fit_drm_risk_3split_zcta_low)
 
 
-#b is not actually a slope - but a scaling factor that needs to be transformed into the slope
+# b is not actually a slope - but a scaling factor that needs to be transformed into the slope
 slopes_zcta <- as_tibble(coef(fit_drm_risk_3split_zcta_high), rownames = "vars") %>%
   bind_cols(BWQS_risk = "high") %>%
   bind_rows(as_tibble(coef(fit_drm_risk_3split_zcta_mid), rownames = "vars") %>% bind_cols(BWQS_risk = "mid")) %>%
@@ -1743,12 +1734,12 @@ Subway_BWQS_ZCTA_df1 <- bind_cols(Subway_BWQS_ZCTA_df %>% arrange(Risk, date),
 
 
 Subway_BWQS_ZCTA_df2 <- Subway_BWQS_ZCTA_df1 %>%
-  filter(date>"2020-02-16") %>% #subsetting for visualization
+  filter(date>"2020-02-16") %>% # subsetting for visualization
   mutate(Risk = factor(if_else(Risk == "High", "High (≥ 75%ile)", 
                         if_else(Risk=="Mid", "Mid (IQR)", "Low (≤ 25%ile)")), 
                        levels = c("High (≥ 75%ile)", "Mid (IQR)", "Low (≤ 25%ile)")))
-#distinct(date, .keep_all = T)
 
+# Supplementary Figure 6
 sfig6 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_ZCTA_df2, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
   geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
@@ -1761,9 +1752,7 @@ sfig6 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="BWQS Infection Risk Index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-
 sfig6
-
 
 
 #### Appendix
