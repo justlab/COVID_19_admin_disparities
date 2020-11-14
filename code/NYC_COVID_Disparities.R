@@ -28,6 +28,7 @@ library(httr)
 library(jsonlite)
 library(DHARMa)
 library(kableExtra)
+library(lwgeom)
 # Github packages available via: 
 #   remotes::install_github("justlab/Just_universal")  
 #   remotes::install_github("justlab/MTA_turnstile")
@@ -650,33 +651,47 @@ ZCTA_by_boro1 <- ZCTA_by_boro %>%
             tibble(boro = as.character(c("Manhattan", "Manhattan" ,"Queens")), #correcting nas
                      zcta = as.character(c("10069", "10282", "11109"))))
 
-# Figure 3B - Tests
+# get water mask for maps
+source(here("code/water_mask.R"))
+
+# Figure 3B - Map of Tests by MODZCTA
+
+theme_smallmaps <- theme(legend.title = element_text(face = "bold", size = 9), 
+                         plot.title = element_text(size = 9.5),
+                         panel.background = element_rect(fill = "#cccccc"), 
+                         panel.grid = element_blank(),
+                         legend.background = element_rect(fill = "transparent"),
+                         legend.position = c(0.22, 0.80),
+                         legend.text = element_text(size = 8.5),
+                         plot.margin = unit(c(4,0,4,0), "pt"),
+                         legend.key.size = unit(1.1, "lines"),
+                         axis.text = element_blank(),
+                         axis.ticks = element_blank(),
+                         axis.title.y = element_blank(),
+                         axis.title.x = element_blank())
+
 fig3b <- MODZCTA_NYC_shp1 %>%
   left_join(., May7_tests, by = "zcta") %>%
   left_join(., ACS_Data2, by = "zcta") %>%
   filter(zcta != "99999") %>%
   mutate(pos_per_100000 = (Positive/total_pop1)*100000) %>%
   ggplot() +
-  geom_sf(data = NYC_basemap_shp)+
+  geom_sf(data = basemap_water, fill = "white", lwd = 0) + 
   geom_sf(aes(fill = pos_per_100000), lwd = 0.2)+
   scalebar(MODZCTA_NYC_shp1, dist = 5, dist_unit = "km", 
            transform = TRUE, model = "WGS84", 
-           st.size = 2.3, height = 0.015, border.size = 0.5,
+           st.size = 2.8, height = 0.015, border.size = 0.5, 
            anchor = c(x = -73.71, y = 40.51)) + 
   labs(fill = "Positives per 100,000") +
-  ggtitle("Cumulative Positive COVID tests by zip code (May 7, 2020)") +
+  ggtitle("Cumulative positive COVID tests by zip code (May 7, 2020)") +
   scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
+  coord_sf(crs = st_crs(MODZCTA_NYC_shp1),
+           xlim = c(plot_bounds$xmin, plot_bounds$xmax), 
+           ylim = c(plot_bounds$ymin, plot_bounds$ymax),
+           expand = FALSE) +
   theme_bw(base_size = 6) + 
-  theme(legend.title = element_text(face = "bold", size = 6), 
-        panel.background = element_rect(fill = "#ffffff"), 
-        panel.grid = element_line(color = "gray", linetype = "dashed"),
-        legend.background = element_rect(fill = "transparent"),
-        legend.position = c(0.15, 0.80),
-        legend.text = element_text(size = 6),
-        plot.margin = unit(c(4,0,4,0), "pt"),
-        legend.key.size = unit(1.1, "lines"),
-        axis.title.y = element_blank(),
-        axis.title.x = element_blank())
+  theme_smallmaps
+  
 fig3b
 
 #### Create data frames of all above information ####
@@ -1077,22 +1092,29 @@ ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>%
 ZCTA_BWQS_COVID_shp <- st_transform(ZCTA_BWQS_COVID_shp, 4326)
 
 # Figure 3A - BWQS Index by ZCTA
-fig3a <- ggplot(ZCTA_BWQS_COVID_shp) + 
-  geom_sf(aes(fill = BWQS_index), lwd = 0.2) + 
+fig3a <- ggplot() + 
+  geom_sf(data = basemap_water, fill = "white", lwd = 0) + 
+  geom_sf(data = ZCTA_BWQS_COVID_shp, aes(fill = BWQS_index), lwd = 0.2) + 
   scalebar(ZCTA_BWQS_COVID_shp, dist = 5, dist_unit = "km", 
            transform = TRUE, model = "WGS84", 
-           st.size = 2.3, height = 0.015, border.size = 0.5,
-           anchor = c(x = -73.71, y = 40.51)) + 
+           st.size = 2.8, height = 0.015, border.size = 0.5, st.dist = 0.011,
+           anchor = c(x = -73.71, y = 40.49)) + 
   scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
-  theme_bw(base_size = 5) + 
-  labs(fill = "BWQS infection risk index") +
-  theme(legend.title = element_text(face = "bold", size = 7), 
-        panel.background = element_rect(fill = "#ffffff"), 
+  coord_sf(crs = st_crs(ZCTA_BWQS_COVID_shp),
+           xlim = c(plot_bounds$xmin, plot_bounds$xmax), 
+           ylim = c(plot_bounds$ymin, plot_bounds$ymax),
+            expand = FALSE) +
+  theme_bw(base_size = 6) + 
+  labs(fill = "COVID-19 Inequity Index") +
+  theme(legend.title = element_text(face = "bold", size = 9), 
+        panel.background = element_rect(fill = "#cccccc"), 
         legend.background = element_rect(fill = "transparent"),
-        panel.grid = element_line(color = "gray", linetype = "dashed"),
-        legend.position = c(0.10, 0.90),
-        legend.text = element_text(size = 6),
+        panel.grid = element_blank(),
+        legend.position = c(0.125, 0.90),
+        legend.text = element_text(size = 8.5),
         legend.key.size = unit(1.1, "lines"),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
         axis.title.y = element_blank(),
         axis.title.x = element_blank())
 fig3a
@@ -1440,31 +1462,31 @@ ZCTA_BWQS_COVID_shp1 <- ZCTA_ACS_COVID_shp %>%
 # Figure 3C - Mortality
 fig3c <- ZCTA_BWQS_COVID_shp1 %>% 
   ggplot() +
-  geom_sf(data = NYC_basemap_shp)+
+  geom_sf(data = basemap_water, fill = "white", lwd = 0) + 
   geom_sf(aes(fill = COVID_DEATH_RATE), lwd = 0.2)+
+  scalebar(MODZCTA_NYC_shp1, dist = 5, dist_unit = "km", 
+           transform = TRUE, model = "WGS84", 
+           st.size = 2.8, height = 0.015, border.size = 0.5,
+           anchor = c(x = -73.71, y = 40.51)) + 
   labs(fill = "Mortality per 100,000") +
-  ggtitle("Cumulative COVID Mortality by zip code (May 23, 2020)") +
+  ggtitle("Cumulative COVID mortality by zip code (May 23, 2020)") +
   scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
+  coord_sf(crs = st_crs(ZCTA_BWQS_COVID_shp),
+           xlim = c(plot_bounds$xmin, plot_bounds$xmax), 
+           ylim = c(plot_bounds$ymin, plot_bounds$ymax),
+           expand = FALSE) +
   theme_bw(base_size = 6) + 
-  theme(axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        legend.title = element_text(face = "bold", size = 6), 
-        panel.background = element_rect(fill = "#ffffff"), 
-        panel.grid = element_line(color = "gray", linetype = "dashed"),
-        legend.background = element_rect(fill = "transparent"),
-        legend.position = c(0.15, 0.80),
-        legend.text = element_text(size = 6),
-        legend.key.size = unit(1.1, "lines"),
-        plot.margin = unit(c(4,0,4,0), "pt"))
+  theme_smallmaps
+
 fig3c
 
 # Combine subfigures to make Figure 3: maps of BWQS, Tests, and Mortality by ZCTA
-fig3a_2 = fig3a + labs(tag = "A") + theme(plot.tag.position = c(0.0,0.99), plot.tag = element_text(face = "bold", size = 14))
-fig3b_2 = fig3b + labs(tag = "B") + theme(plot.tag.position = c(0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
-fig3c_2 = fig3c + labs(tag = "C") + theme(plot.tag.position = c(-0.025, 0.945), plot.tag = element_text(face = "bold", size = rel(2.1)))
+fig3a_2 = fig3a + labs(tag = "a") + theme(plot.tag.position = c(-0.018, 0.985), plot.tag = element_text(face = "bold", size = 15))
+fig3b_2 = fig3b + labs(tag = "b") + theme(plot.tag.position = c(-0.028, 0.93), plot.tag = element_text(face = "bold", size = 15))
+fig3c_2 = fig3c + labs(tag = "c") + theme(plot.tag.position = c(-0.028, 0.93), plot.tag = element_text(face = "bold", size = 15))
 
 plotres = 300
-agg_png(filename = file.path(fig.path, paste0("fig3_combined_", Sys.Date(), "_ragg.png")), 
+agg_png(filename = file.path(fig.path, paste0("fig3_combined_", Sys.Date(), ".png")), 
         width = plotres*4.25, height = plotres*6, scaling = 2)
 grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1), 
              arrangeGrob(fig3b_2, fig3c_2, ncol = 2, nrow = 1),
