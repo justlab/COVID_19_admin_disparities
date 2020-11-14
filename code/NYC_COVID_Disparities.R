@@ -505,6 +505,8 @@ ACS_Data_scaled <- nassau_zcta_weights(ACS_Data1, modzcta_to_zcta2, ny_xwalk)
 ACS_Data2 <- clean_acs_data_and_derive_vars(ACS_Data_scaled, "zcta")
 ACS_EssentialWrkr_Commute1 = as.data.frame(acs.essential("zcta", zcta_pop = ACS_Data_scaled, state_unit = NULL))
 
+print(paste("The 2018 5-year ACS population range in NYC MODZCTAs is:", paste(range(ACS_Data2$total_pop1), collapse = "-")))
+
 # TRACT CENSUS DATA  
 acs_tracts <- acs.main("tract", "NY", TRUE)
 acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
@@ -1381,7 +1383,6 @@ as_tibble(confint(fit_drm_interact), rownames = "vars") %>%
 
 fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact1, as.data.frame(Subway_BWQS_df %>% dplyr::select(usage.median.ratio, time_index, Risk)), 
                                                              interval = "confidence"), warning = handler))
-# fit_drm_predictions <- as_tibble(withCallingHandlers(predict(fit_drm_interact, interval = "confidence"), warning = handler))
 Subway_BWQS_df1 <- bind_cols(Subway_BWQS_df, fit_drm_predictions) 
 
 Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
@@ -1572,9 +1573,6 @@ bind_rows(Compare_Metrics %>%
                          ~sqrt(mean(pos_per_100000-.x)^2)) %>%
             mutate(parameter = "RMSE"))
 
-sqrt(mean((m - o)^2))
-
-##Examining residuals of the BWQS -- map??
 
 #### Subway analyses ####
 
@@ -1607,8 +1605,6 @@ plot(fit_drm_risk_3split)
 fit_drm_risk_3split_high <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_3split_df, subset = Risk=="High")
 fit_drm_risk_3split_mid <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_3split_df, subset = Risk=="Mid")
 fit_drm_risk_3split_low <- drm(usage.median.ratio ~ time_index, curveid = Risk, fct = W2.4(), data = Subway_BWQS_3split_df, subset = Risk=="Low")
-
-# anova(fit_drm_all, fit_drm_interact) #comparing the mean only model to the interaction model 
 
 summary(fit_drm_risk_3split_high)
 summary(fit_drm_risk_3split_mid)
