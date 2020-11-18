@@ -1562,8 +1562,30 @@ as_tibble(confint(clean.nb.sens), rownames = "vars")%>% mutate_at(vars(2:3), .fu
 lm.morantest(clean.nb.sens, resfun = residuals, listw=ny.wt6)
 spdat.sens$nb_residuals <- clean.nb.sens$residuals
 spplot(spdat.sens, "nb_residuals", at=quantile(spdat.sens$nb_residuals, p=seq(0,1,length.out = 10)))
-ggplot() + geom_sf(data = st_as_sf(spdat.sens),aes(fill = cut_width(nb_residuals, width = 1))) + labs(fill = "Residuals\n(Standard Deviations)")
-
+pal_sfig10 <- brewer_pal(type = "div", palette = "RdYlBu")(5)[2:5] 
+pal_sfig10[[2]] <- "#fafadf" # make yellow less saturated
+sfig10 <- ggplot() + 
+  geom_sf(data = basemap_water, fill = "white", lwd = 0) + 
+  geom_sf(data = st_as_sf(spdat.sens), aes(fill = cut_width(nb_residuals, width = 1)), lwd = 0.2) + 
+  scale_fill_discrete(type = pal_sfig10) + 
+  coord_sf(crs = st_crs(MODZCTA_NYC_shp1),
+           xlim = c(plot_bounds$xmin, plot_bounds$xmax), 
+           ylim = c(plot_bounds$ymin, plot_bounds$ymax),
+           expand = FALSE) + 
+  labs(fill = "Residuals\n(Standard Deviations)") + 
+  theme(panel.background = element_rect(fill = "#cccccc"), 
+        panel.grid = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(),
+        legend.title = element_text(face = "bold", size = 9),
+        legend.text = element_text(size = 8.5),
+        plot.margin = unit(c(0.1,0.1,0.1,0.1), "in")
+        )
+sfig10
+if(export.figs) ggsave(sfig10, filename = file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png")), 
+                       dpi = 300, width = 5, height = 3.2)
 
 #### Sensitivity Analyses ####
 
