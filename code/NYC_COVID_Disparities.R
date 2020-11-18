@@ -995,16 +995,56 @@ BWQS_index <- ZCTA_ACS_COVID2 %>%
   dplyr::mutate(BWQS_index = rowSums(.)) %>% 
   dplyr::select(BWQS_index) 
 
-# calculate predictions at the median testing_ratio
-BWQS_predicted_terms = BWQS_params[BWQS_params$label == "beta0", ]$mean + 
-   c(predict(m1data$K, median(ZCTA_ACS_COVID$testing_ratio)) %*% BWQS_params$mean[grepl(pattern = "delta", BWQS_params$label)])
-BWQS_pred_median_testing <- data.frame(mean = exp(BWQS_predicted_terms + 
-                                                    BWQS_params[BWQS_params$label == "beta1",]$mean * BWQS_index$BWQS_index),
-                                       lower = exp(BWQS_predicted_terms + 
-                                                     BWQS_params[BWQS_params$label == "beta1",]$`2.5%` * BWQS_index$BWQS_index),
-                                       upper = exp(BWQS_predicted_terms + 
-                                                     BWQS_params[BWQS_params$label == "beta1",]$`97.5%` * BWQS_index$BWQS_index))
-rm(BWQS_predicted_terms)
+# calculate credible interval over the mean predicted infections
+# at the median testing_ratio
+sim_out <- data.frame(extract(m1, pars = c("beta0", "beta1", "delta")))
+median_testing <- predict(m1data$K, median(ZCTA_ACS_COVID$testing_ratio))
+# calculate term for median testing_rate
+sim_out$deltamedian <- with(sim_out, median_testing[1] * delta.1 + 
+                              median_testing[2] * delta.2 + 
+                              median_testing[3] * delta.3)
+# make a sequence of BWQS values
+xseqlength <- 300
+bwqs_seq <- seq(from = min(BWQS_index$BWQS_index), 
+                to = max(BWQS_index$BWQS_index), 
+                length.out = xseqlength)
+sim_matrix <- sim_out$beta0 %o% rep(1, xseqlength) + 
+  sim_out$beta1 %o% bwqs_seq + 
+  sim_out$deltamedian%o% rep(1, xseqlength)
+sim_df <- data.frame(bwqs_seq, 
+                     lower = exp(colQuantiles(sim_matrix, probs = 0.025)),
+                     upper = exp(colQuantiles(sim_matrix, probs = 0.975)),
+                     mean = exp(colMeans(sim_matrix)))
+ggplot(sim_df, aes(x = bwqs_seq)) + 
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "grey90") + 
+  geom_line(aes(y = mean)) + 
+  geom_point(data = data.frame(BWQS_index, y = m1data$data_list$y), aes(BWQS_index, y))
+#beta0 + beta1*(XC_new[n,]*W) + XK_new[n,]*delta
+
+# calculate credible interval over the mean predicted infections
+# at the median COVID-19 inequity index
+sim_out$beta1median <- sim_out$beta1 * median(BWQS_index$BWQS_index)
+# make a sequence of testing_ratio values
+xseqlength <- 300
+inequity_seq <- data.frame(x = seq(from = min(ZCTA_ACS_COVID$testing_ratio),
+                                   to = max(ZCTA_ACS_COVID$testing_ratio),
+                                   length.out = xseqlength))
+inequity_seq <- data.frame(x = inequity_seq$x, t(sapply(inequity_seq$x, FUN = function(x) predict(m1data$K, x))))
+sim_matrix <- 
+  sim_out$beta0 %o% rep(1, xseqlength) + 
+  sim_out$beta1median %o% rep(1, xseqlength) + 
+  sim_out$delta.1 %o% inequity_seq$X1  + 
+  sim_out$delta.2 %o% inequity_seq$X2  + 
+  sim_out$delta.3 %o% inequity_seq$X3
+sim_df <- data.frame(x = inequity_seq$x, 
+                     lower = exp(colQuantiles(sim_matrix, probs = 0.025)),
+                     upper = exp(colQuantiles(sim_matrix, probs = 0.975)),
+                     mean = exp(colMeans(sim_matrix)))
+ggplot(sim_df, aes(x = x)) + 
+  geom_ribbon(aes(ymin = lower, ymax = upper), fill = "grey90") + 
+  geom_line(aes(y = mean)) + 
+  geom_point(data = data.frame(testing_ratio = ZCTA_ACS_COVID$testing_ratio, y = m1data$data_list$y), aes(testing_ratio, y))
+
 
 BWQS_predicted_infections = exp(BWQS_params[BWQS_params$label == "beta0", ]$mean + 
   (BWQS_params[BWQS_params$label == "beta1", ]$mean * BWQS_index) + 
