@@ -1454,15 +1454,16 @@ notincluded_uhf_shp <- UHF_BWQS_COVID_shp %>%
            UHFCODE !=0) %>%
   mutate(NotIncluded = "*")
 
-sfig3 <- ggplot() + 
+# Supplementary Figure 5
+sfig5 <- ggplot() + 
   geom_sf(data = NYC_basemap_shp) +
   geom_sf(data = subset(UHF_BWQS_COVID_shp, !is.na(Risk)), aes(fill = Risk)) + 
   geom_sf(data = SubwayStation_shp) +
   geom_sf_text(data = notincluded_uhf_shp, aes(label = NotIncluded), size = 9) +
   xlab("") + ylab("") +
   theme_bw()
-sfig3
-if(export.figs) ggsave(sfig3, filename = file.path(fig.path, paste0("sfig3", "_", Sys.Date(),".png")), dpi = 500)
+sfig5
+if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png")), dpi = 500)
 
 
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
@@ -1717,8 +1718,8 @@ Subway_BWQS_3split_df2 <- Subway_BWQS_3split_df1 %>%
                         if_else(Risk=="Mid", "Mid (IQR)", "Low (≤ 25%ile)")),
                        levels = c("High (≥ 75%ile)", "Mid (IQR)", "Low (≤ 25%ile)")))
 
-# Supplementary Figure 5
-sfig5 <- ggplot() + 
+# Supplementary Figure 7
+sfig7 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_3split_df2, aes(x = date, y = usage.median.ratio, color = as.factor(Risk)), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
   geom_ribbon(data = subset(Subway_BWQS_3split_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_ribbon(data = subset(Subway_BWQS_3split_df2, Risk == "Mid (IQR)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
@@ -1730,7 +1731,8 @@ sfig5 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="BWQS Infection Risk Index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-sfig5 
+sfig7 
+if(export.figs) ggsave(sfig7 , filename = file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png")), dpi = 500)
 
 # ZCTA level BWQS for subway 
 Subway_ridership_by_ZCTA <- relative.subway.usage(2020, by = "zcta")
