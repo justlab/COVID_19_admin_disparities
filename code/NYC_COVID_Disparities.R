@@ -135,6 +135,9 @@ get.Pluto <- function() download(
             c("landuse", "bbl", "numfloors", "unitstotal", "unitsres",
                 "zipcode")]))
 Pluto <- as.data.frame(get.Pluto())
+# If you get an error in running this function, the download may be incomplete/corrupt
+# In that case, delete the pluto.zip file and try again:
+#unlink(file.path(data.root, "downloads", "pluto.zip"))
 
 if (file.exists(file.path(data.root, "Bldg_Footprints.qs"))) {
     Bldg_Footprints <- qread(file.path(data.root, "Bldg_Footprints.qs"))
