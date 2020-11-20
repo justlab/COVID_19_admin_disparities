@@ -881,7 +881,9 @@ Compute_Bayes_R2 <- function(fit) {
   var_res = mean_fit  + (mean_fit^2)/phi
   r2 = var_fit / (var_fit + var_res)
   return(list(meanr2 = mean(r2),
-              medianr2 = median(r2)))
+              medianr2 = median(r2),
+              lowerr2 = quantile(r2, .025),
+              upperr2 = quantile(r2, .975)))
 }
 
 prep_BWQS_data <- function(df, ses_varnames){
@@ -918,7 +920,9 @@ traceplot(m1, pars = c("beta1", "W"))
 stan_ac(m1, pars = c("beta1", "W"))
 
 extract_waic(m1)
-Compute_Bayes_R2(m1)$meanr2
+round(Compute_Bayes_R2(m1)$meanr2, 2)
+round(Compute_Bayes_R2(m1)$lowerr2, 2)
+round(Compute_Bayes_R2(m1)$upperr2, 2)
 
 # residual analysis with DHARMa
 residuals_qq <- createDHARMa(simulatedResponse = t(extract(m1,"y_new")$y_new), observedResponse = m1data$data_list$y)
