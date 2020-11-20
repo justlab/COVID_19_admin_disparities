@@ -926,7 +926,23 @@ round(Compute_Bayes_R2(m1)$upperr2, 2)
 
 # residual analysis with DHARMa
 residuals_qq <- createDHARMa(simulatedResponse = t(extract(m1,"y_new")$y_new), observedResponse = m1data$data_list$y)
-plotQQunif(residuals_qq, testOutliers = F, testDispersion = F)
+#plotQQunif(residuals_qq, testOutliers = F, testDispersion = F) #base graphics
+ks_unif <- testUniformity(residuals_qq)
+residuals_qq_unif <- gap::qqunif(residuals_qq$scaledResiduals,pch=2,bty="n", logscale = F, col = "black", cex = 0.6, main = "QQ plot residuals", cex.main = 1)
+sfig3_qq <- ggplot(data.frame(x = residuals_qq_unif$x, y = residuals_qq_unif$y)) +
+  geom_abline(linetype = "dashed", color = "blue") +
+  scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
+  geom_point(aes(x, y), size = 0.8) +
+  annotate("text", x = 0.02, y = 0.9, hjust = 0,
+           label = paste0("Kolmogorov-Smirnov test for\ncomparison of distributions: p=",
+                          round(ks_unif$p.value, 2))) +
+  coord_equal(ratio = 1) +
+  labs(x = "Expected", y = "Observed") +
+  theme_bw() + theme(plot.margin = unit(c(5.5, 11, 5.5, 5.5), "points"))
+sfig3_qq
+if(export.figs) ggsave(filename = file.path(fig.path, paste0("sfig3_", Sys.Date(), ".png")), width = 3.5, height = 3.4)
+
 
 # examine parameter estimates
 exp(mean(extract(m1, "beta1")$beta1))
