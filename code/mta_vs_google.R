@@ -71,18 +71,18 @@ comp_long = melt.data.table(comp[date >= as.Date("2020-03-01")], id.vars = c("da
 first_date = comp_long[, min(date)]
 last_date = comp_long[, max(date)]
 
-# Supplmental Figure 9
+# Supplemental Figure 9
 mobplot <- ggplot(comp_long[!is.na(relative_use)], 
        aes(x = date, y = relative_use, linetype = source, col = place)) + 
-  theme_bw() + 
   geom_line() + scale_color_discrete(name = "Borough") + scale_linetype_discrete(name = "Data Source") + 
-  xlab("") + 
+  xlab("Date") + 
   scale_y_continuous("Relative to Baseline (%)", breaks = c(0.25, 0.5, 0.75, 1), 
                      labels = scales::percent) + 
   scale_x_date(date_minor_breaks = "1 week", limits = c(first_date, last_date + 1), 
                breaks = as.Date(c("2020-03-01", "2020-04-01", "2020-05-01")),
                labels = scales::date_format("%b")) + 
-  theme(legend.title = element_text(face = "bold", size = 8), legend.position = c(0.73, 0.75),
+  theme_bw(base_size = 16) + 
+  theme(legend.title = element_text(face = "bold", size = 8), legend.position = c(0.68, 0.75),
         legend.spacing = unit(1, "points"), legend.box="horizontal") 
 
 plotres = 300
