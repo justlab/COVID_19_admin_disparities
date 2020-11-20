@@ -934,7 +934,7 @@ sfig3_qq <- ggplot(data.frame(x = residuals_qq_unif$x, y = residuals_qq_unif$y))
   scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
   scale_y_continuous(limits = c(0, 1), expand = c(0, 0)) +
   geom_point(aes(x, y), size = 0.8) +
-  annotate("text", x = 0.02, y = 0.9, hjust = 0,
+  annotate("text", x = 0.02, y = 0.9, hjust = 0, size = 3.2,
            label = paste0("Kolmogorov-Smirnov test for\ncomparison of distributions: p=",
                           round(ks_unif$p.value, 2))) +
   coord_equal(ratio = 1) +
