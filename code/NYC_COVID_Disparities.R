@@ -956,9 +956,8 @@ sfig3_qq <- ggplot(data.frame(x = residuals_qq_unif$x, y = residuals_qq_unif$y))
   coord_equal(ratio = 1) +
   labs(x = "Expected", y = "Observed") +
   theme_bw() + theme(plot.margin = unit(c(5.5, 11, 5.5, 5.5), "points"))
-sfig3_qq
 if(export.figs) ggsave(filename = file.path(fig.path, paste0("sfig3_", Sys.Date(), ".png")), width = 3.5, height = 3.4)
-
+#' ![](`r file.path(fig.path, paste0("sfig3_", Sys.Date(), ".png"))`)
 
 # examine parameter estimates
 exp(mean(extract(m1, "beta1")$beta1))
@@ -1025,8 +1024,8 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
   theme_set(theme_bw(base_size = 18)) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
-fig2
 if(export.figs) ggsave(fig2, filename = file.path(fig.path, paste0("fig2", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 8)
+#' ![](`r file.path(fig.path, paste0("fig2", "_", Sys.Date(),".png"))`)
 
 # Step 4: Construct the summative COVID-19 inequity index value for each ZCTA
 # Use the variable-specific weight on the quantiled splits to create a 10 point ZCTA-level infection risk score  
@@ -1129,6 +1128,7 @@ if(export.figs) {
   print(BWQS_scatter)
   dev.off()
 }
+#' ![](`r file.path(fig.path, paste0("fig1_", Sys.Date(), ".png"))`)
 
 # Visualize the relationship between testing_ratio and infection rate at the median BWQS
 testing_scatter <- ggplot(sim_testing_df, aes(x = x)) + 
@@ -1146,6 +1146,7 @@ if(export.figs) {
   print(testing_scatter)
   dev.off()
 }
+#' ![](`r file.path(fig.path, paste0("Sfig2_", Sys.Date(), ".png"))`)
 
 # Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
 
@@ -1226,8 +1227,8 @@ fig4 <- ggplot(Demographics_for_ridges,
   scale_y_discrete(expand = c(0, 0)) + 
   expand_limits(y = 6) + 
   theme(legend.position = "none")
-fig4
 if(export.figs) ggsave(plot = fig4, filename = file.path(fig.path, paste0("fig4","_",Sys.Date(),".png")), dpi = 400, device = "png", width = 8, height = 5)
+#' ![](`r file.path(fig.path, paste0("fig4","_",Sys.Date(),".png"))`)
 
 Below_25th_zctas <- ZCTA_BQWS %>%
   filter(BWQS_index<quantile(BWQS_index, .25))
@@ -1299,8 +1300,8 @@ sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
         axis.text.y = element_text(size = 16),
         axis.text.x = element_text(size = 16, color = "black"), 
         axis.title.x = element_blank()) 
-sfig2
 if(export.figs) ggsave(sfig2, filename = file.path(fig.path, paste0("sfig2","_",Sys.Date(),".png")), device = "png", dpi = 500, width = 12, height = 6)
+#' ![](`r file.path(fig.path, paste0("sfig2","_",Sys.Date(),".png"))`)
 
 #' # BWQS by Tract
 #### BWQS by Tract ####
@@ -1430,8 +1431,8 @@ sfig6 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridersh
   theme_bw(base_size = 16) +
   xlab("Date") +
   ylab("Relative Subway Use (%)")
-sfig6
 if(export.figs) ggsave(sfig6, filename = file.path(fig.path, paste0("sfig6", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
+#' ![](`r file.path(fig.path, paste0("sfig6", "_", Sys.Date(), ".png"))`)
 
 # create a dataframe for the analysis 
 service_changes_in_lowsubway_areas <- tibble(date = as.Date(c("2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-15", "2020-02-16", "2020-02-22", "2020-02-23", "2020-02-29", "2020-03-01", "2020-03-07", "2020-03-08", 
@@ -1494,8 +1495,8 @@ fig5 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-fig5 
 if(export.figs) ggsave(fig5, filename = file.path(fig.path, paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
+#' ![](`r file.path(fig.path, paste0("fig5", "_", Sys.Date() ,".png"))`)
 
 # which UHF neighborhoods were dropped?
 included_uhf <- Subway_BWQS_df %>% distinct(UHFCODE)
@@ -1514,7 +1515,7 @@ sfig5 <- ggplot() +
   theme_bw()
 sfig5
 if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png")), dpi = 500)
-
+#' ![](`r file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png"))`)
 
 #' # Part 3: Spatial analysis of mortality in relation to BWQS scores
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
@@ -1618,9 +1619,9 @@ sfig10 <- ggplot() +
         legend.text = element_text(size = 8.5),
         plot.margin = unit(c(0.1,0.1,0.1,0.1), "in")
         )
-sfig10
 if(export.figs) ggsave(sfig10, filename = file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png")), 
                        dpi = 300, width = 5, height = 3.2)
+#' ![](`r file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png"))`)
 
 #' # Sensitivity Analyses
 #### Sensitivity Analyses ####
@@ -1784,8 +1785,8 @@ sfig7 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-sfig7 
 if(export.figs) ggsave(sfig7 , filename = file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 6)
+#' ![](`r file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png"))`)
 
 # ZCTA level BWQS for subway 
 Subway_ridership_by_ZCTA <- relative.subway.usage(2020, by = "zcta")
@@ -1869,8 +1870,8 @@ sfig6 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-sfig6
 if(export.figs) ggsave(sfig6 , filename = file.path(fig.path, paste0("sfig6 ", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 6)
+#' ![](`r file.path(fig.path, paste0("sfig6 ", "_", Sys.Date(),".png"))`)
 
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
 source(here("code/mta_vs_google.R"), echo = FALSE)
