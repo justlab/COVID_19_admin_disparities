@@ -680,8 +680,8 @@ theme_smallmaps <- theme(legend.title = element_text(face = "bold", size = 9),
                          legend.key.size = unit(1.1, "lines"),
                          axis.text = element_blank(),
                          axis.ticks = element_blank(),
-                         axis.title.y = element_blank(),
-                         axis.title.x = element_blank())
+                         axis.ticks.length = unit(0, "pt"),
+                         axis.title = element_blank())
 
 fig3b <- MODZCTA_NYC_shp1 %>%
   left_join(., May7_tests, by = "zcta") %>%
@@ -1507,14 +1507,22 @@ notincluded_uhf_shp <- UHF_BWQS_COVID_shp %>%
 
 # Supplementary Figure 5
 sfig5 <- ggplot() + 
+  geom_sf(data = basemap_water, fill = "white", lwd = 0) + 
   geom_sf(data = NYC_basemap_shp, size = 0.2) +
   geom_sf(data = subset(UHF_BWQS_COVID_shp, !is.na(Risk)), aes(fill = Risk), size = 0.2) + 
+  labs(fill = "COVID-19 inequity index\ngrouping") + 
   geom_sf(data = SubwayStation_shp, size = 0.6) +
   geom_sf_text(data = notincluded_uhf_shp, aes(label = NotIncluded), size = 9, color = "grey15") +
-  xlab("") + ylab("") +
-  theme_bw()
-sfig5
-if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png")), dpi = 500)
+  coord_sf(crs = st_crs(ZCTA_BWQS_COVID_shp),
+           xlim = c(plot_bounds$xmin, plot_bounds$xmax), 
+           ylim = c(plot_bounds$ymin, plot_bounds$ymax),
+           expand = FALSE) +
+  theme_bw() + 
+  theme_smallmaps + 
+  theme(legend.position = c(0.22, 0.86), plot.margin = margin(0, 0, 0, 0, "pt"))
+#+ warning=FALSE
+if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png")), 
+                       dpi = 300, width = 4, height = 4)
 #' ![](`r file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png"))`)
 
 #' # Part 3: Spatial analysis of mortality in relation to BWQS scores
