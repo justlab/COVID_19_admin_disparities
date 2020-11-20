@@ -1476,10 +1476,10 @@ notincluded_uhf_shp <- UHF_BWQS_COVID_shp %>%
 
 # Supplementary Figure 5
 sfig5 <- ggplot() + 
-  geom_sf(data = NYC_basemap_shp) +
-  geom_sf(data = subset(UHF_BWQS_COVID_shp, !is.na(Risk)), aes(fill = Risk)) + 
-  geom_sf(data = SubwayStation_shp) +
-  geom_sf_text(data = notincluded_uhf_shp, aes(label = NotIncluded), size = 9) +
+  geom_sf(data = NYC_basemap_shp, size = 0.2) +
+  geom_sf(data = subset(UHF_BWQS_COVID_shp, !is.na(Risk)), aes(fill = Risk), size = 0.2) + 
+  geom_sf(data = SubwayStation_shp, size = 0.6) +
+  geom_sf_text(data = notincluded_uhf_shp, aes(label = NotIncluded), size = 9, color = "grey15") +
   xlab("") + ylab("") +
   theme_bw()
 sfig5
