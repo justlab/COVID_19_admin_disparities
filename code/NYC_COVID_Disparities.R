@@ -1178,7 +1178,7 @@ Demographics_for_ridges <- Demographics %>%
 
 fig4 <- ggplot(Demographics_for_ridges,
        aes(x = BWQS_index, y = `Race/Ethnicity`)) + 
-  xlab("BWQS infection risk index")+
+  xlab("COVID-19 inequity index")+
   theme(legend.position = "none") +
   geom_density_ridges(
     aes(height = ..density..,  
@@ -1446,7 +1446,7 @@ fig5 <- ggplot() +
   scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent) + 
   geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
   theme_bw(base_size = 16) +
-  labs(colour="BWQS Infection Risk Index") +
+  labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 fig5 
 if(export.figs) ggsave(fig5, filename = file.path(fig.path, paste0("fig5", "_", Sys.Date() ,".png")), dpi = 600, width = 8, height = 6)
@@ -1600,7 +1600,6 @@ as_tibble(extract(m1, c("W[1]","W[2]", "W[3]", "W[4]", "W[5]", "W[6]", "W[7]", "
 # using essential workers, testing ratio, and median income
 glm_esstl_and_income <- glm.nb(pos_per_100000 ~ not_quarantined_jobs + medincome + testing_ratio, data = ZCTA_ACS_COVID)
 broom::tidy(glm_esstl_and_income)
-plot(glm_esstl_and_income)
 enframe(predict(glm_esstl_and_income)) %>% mutate(value = exp(value))
 
 # Just using proportion uninsured and median income
@@ -1733,7 +1732,7 @@ sfig7 <- ggplot() +
   scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent) + 
   geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
   theme_bw(base_size = 16) +
-  labs(colour="BWQS Infection Risk Index") +
+  labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 sfig7 
 if(export.figs) ggsave(sfig7 , filename = file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png")), dpi = 500)
@@ -1818,9 +1817,10 @@ sfig6 <- ggplot() +
   scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent) + 
   geom_vline(xintercept = date("2020-03-22"),color = "grey30", lty = 2) + 
   theme_bw(base_size = 16) +
-  labs(colour="BWQS Infection Risk Index") +
+  labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 sfig6
+if(export.figs) ggsave(sfig6 , filename = file.path(fig.path, paste0("sfig6 ", "_", Sys.Date(),".png")), dpi = 500)
 
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
 source(here("code/mta_vs_google.R"))
