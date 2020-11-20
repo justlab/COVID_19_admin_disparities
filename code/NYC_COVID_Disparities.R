@@ -1237,6 +1237,8 @@ Demographics_by_BWQS <- bind_rows(Race_Ethncity_all, Race_Ethncity_below25th, Ra
 
 labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percentile BWQS" = "Below 25th\npercentile BWQS", 
                          "Between 25-75th percentile BWQS" = "Between 25-75th\npercentile BWQS", "Above 75th percentile BWQS" = "Above 75th\npercentile BWQS")
+labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percentile BWQS" = "Below 25th\n%ile index", 
+                         "Between 25-75th percentile BWQS" = "Between 25-75th\n%ile index", "Above 75th percentile BWQS" = "Above 75th\n%ile index")
 
 sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) + 
     geom_rect(data = subset(Demographics_by_BWQS, Group=="NYC Population"), 
@@ -1735,7 +1737,7 @@ sfig7 <- ggplot() +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 sfig7 
-if(export.figs) ggsave(sfig7 , filename = file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png")), dpi = 500)
+if(export.figs) ggsave(sfig7 , filename = file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 6)
 
 # ZCTA level BWQS for subway 
 Subway_ridership_by_ZCTA <- relative.subway.usage(2020, by = "zcta")
@@ -1820,7 +1822,7 @@ sfig6 <- ggplot() +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
 sfig6
-if(export.figs) ggsave(sfig6 , filename = file.path(fig.path, paste0("sfig6 ", "_", Sys.Date(),".png")), dpi = 500)
+if(export.figs) ggsave(sfig6 , filename = file.path(fig.path, paste0("sfig6 ", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 6)
 
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
 source(here("code/mta_vs_google.R"))
