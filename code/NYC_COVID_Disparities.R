@@ -1195,12 +1195,14 @@ Demographics_for_ridges <- Demographics %>%
 fig4 <- ggplot(Demographics_for_ridges,
        aes(x = BWQS_index, y = `Race/Ethnicity`)) + 
   xlab("COVID-19 inequity index")+
-  theme(legend.position = "none") +
   geom_density_ridges(
     aes(height = ..density..,  
         weight = Population / sum(Population)),
     scale = 0.95,
-    stat ="density") 
+    stat ="density") + 
+  scale_y_discrete(expand = c(0, 0)) + 
+  expand_limits(y = 6) + 
+  theme(legend.position = "none")
 fig4
 if(export.figs) ggsave(plot = fig4, filename = file.path(fig.path, paste0("fig4","_",Sys.Date(),".png")), dpi = 400, device = "png", width = 8, height = 5)
 
@@ -1394,14 +1396,14 @@ handler <- function(w) if( any( grepl( "Recycling array of length 1 in array-vec
 DRM_mean_predictions <- bind_cols(Mean_Ridership,
                                   as_tibble(withCallingHandlers(predict(fit_drm_w2.4, interval = "confidence"), warning = handler ))) 
 
-sfig4 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage.median.ratio)) + 
+sfig6 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage.median.ratio)) + 
   geom_ribbon(data = DRM_mean_predictions, aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50", alpha = .5) +
   geom_line(aes(x = DRM_mean_predictions$date, y = DRM_mean_predictions$Prediction), color = "red") + 
   theme_bw(base_size = 16) +
   xlab("Date") +
   ylab("Relative Subway Use (%)")
-sfig4
-if(export.figs) ggsave(sfig4, filename = file.path(fig.path, paste0("sfig4", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
+sfig6
+if(export.figs) ggsave(sfig6, filename = file.path(fig.path, paste0("sfig6", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
 
 # create a dataframe for the analysis 
 service_changes_in_lowsubway_areas <- tibble(date = as.Date(c("2020-02-01", "2020-02-02", "2020-02-08", "2020-02-09", "2020-02-15", "2020-02-16", "2020-02-22", "2020-02-23", "2020-02-29", "2020-03-01", "2020-03-07", "2020-03-08", 
