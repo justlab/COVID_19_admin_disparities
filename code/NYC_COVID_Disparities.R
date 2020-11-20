@@ -1885,7 +1885,7 @@ sfig8 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-if(export.figs) ggsave(sfig8 , filename = file.path(fig.path, paste0("sfig6 ", "_", Sys.Date(),".png")), 
+if(export.figs) ggsave(sfig8 , filename = file.path(fig.path, paste0("sfig8 ", "_", Sys.Date(),".png")), 
                        dpi = 300, width = 8, height = 6)
 #' ![](`r file.path(fig.path, paste0("sfig8", "_", Sys.Date(),".png"))`)
 
