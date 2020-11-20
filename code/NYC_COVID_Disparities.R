@@ -1,3 +1,6 @@
+#/* This script contains inline R Markdown for added legibility when using knitr::spin 
+# or compiling a report in R Studio. R Markdown lines begin with #', #+, or #/* */
+#+ message=FALSE
 # CRAN packages:
 library(tidyverse)
 library(sf)
@@ -34,6 +37,7 @@ library(lwgeom)
 #   remotes::install_github("justlab/MTA_turnstile")
 library(Just.universal) 
 
+#' # Session Configuration
 #### SESSION CONFIGURATION ####
 options(dplyr.summarise.inform=FALSE)
 
@@ -77,6 +81,7 @@ pm = function(...) pairmemo(
 if(Sys.getenv("CENSUS_API_KEY")=="") warning("Census API Key Missing")
 
 #### Functions ####
+#' # Functions
 
 read_w_filenames <- function(flnm) {
   read_csv(flnm) %>%
@@ -115,6 +120,7 @@ download = function(url, to, f, ...){
         ...)
 }
 
+#' # Load Data
 #### Load Data ####
 
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
@@ -129,7 +135,9 @@ get.Pluto <- function() download(
             c("landuse", "bbl", "numfloors", "unitstotal", "unitsres",
                 "zipcode")]))
 Pluto <- as.data.frame(get.Pluto())
-
+# If you get an error in running this function, the download may be incomplete/corrupt
+# In that case, delete the pluto.zip file and try again:
+#unlink(file.path(data.root, "downloads", "pluto.zip"))
 
 if (file.exists(file.path(data.root, "Bldg_Footprints.qs"))) {
     Bldg_Footprints <- qread(file.path(data.root, "Bldg_Footprints.qs"))
@@ -269,6 +277,7 @@ NYC_boro_county_match <- tibble(County = c("Bronx","Kings","Queens","New York","
 BWQS_stan_model <- here("code", "nb_bwqs_cov.stan") 
 
 
+#' # Census Data
 #### Census Data ####
 
 # function to pull 2010 block population for Queens & Nassau counties
@@ -514,6 +523,7 @@ acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
 acs_tracts_commute1 = as.data.frame(acs.essential("tract", state_unit = "NY"))
 
 
+#' # Grocery stores per area
 #### Grocery stores per area ####
 
 non_supermarket_strings <- c("DELI|TOBACCO|GAS|CANDY|7 ELEVEN|7-ELEVEN|LIQUOR|ALCOHOL|BAKERY|CHOCOLATE|DUANE READE|WALGREENS|CVS|RITE AID|RAVIOLI|WINERY|WINE|BEER|CAFE|COFFEE")
@@ -582,6 +592,7 @@ zcta_grocers <- suppressWarnings(st_intersection(zctaSF, grocerSF)) %>%
 # nrow(zcta_grocers) # 172
 # range(zcta_grocers$grocers) # 1, 21
 
+#' # Subway station locations
 #### Subway station locations ####
 
 SubwayStation_shp <- as_tibble(turnstile()$stations) %>%
@@ -589,6 +600,7 @@ SubwayStation_shp <- as_tibble(turnstile()$stations) %>%
   st_transform(., crs = 2263) %>%
   filter(!str_detect(ca, "PTH")) #removing New Jersey PATH stations
 
+#' # Residential area
 #### Residential area ####
 
 Pluto_ResOnly <- Pluto %>%
@@ -631,6 +643,7 @@ res_bldg_tract_sum <- st_set_geometry(res_bldg_tract, NULL) %>%
 #nrow(res_bldg_tract_sum) # 2132
 
 
+#' # COVID Tests
 #### COVID Tests ####
 
 MODZCTA_NYC_shp1 <- MODZCTA_NYC_shp %>%
@@ -694,6 +707,7 @@ fig3b <- MODZCTA_NYC_shp1 %>%
   
 fig3b
 
+#' # Create data frames of all above information
 #### Create data frames of all above information ####
 
 ZCTA_ACS_COVID_shp <- MODZCTA_NYC_shp1 %>%
@@ -745,6 +759,7 @@ tract_vars <- tractSF %>% # uses local CRS
   dplyr::select(-pubtrans_subway_commute, -pubtrans_ferry_commute) %>%
   mutate_at(vars(starts_with("essentialworker_")), ~round((./over16total_industry1)*100, 2))
 
+#' # Tract to ZCTA weighted assignment
 #### Tract to ZCTA weighted assignment ####
 # Shares of residential addresses in ZCTAs by Tract are later used to select
 # representative tract-level SES values at a specified location on the ECDF
@@ -805,6 +820,7 @@ modzcta_to_tract2 <- dplyr::select(tract_modzcta_pop, -total_pop1)
 
 ### Preparation done --- Now for the Analysis ###
 
+#' # Part 1: Creation of BWQS Neighborhood Infection Risk Scores
 #### Part 1: Creation of BWQS Neighborhood Infection Risk Scores ####
 
 # Step 1: Create univariate scatterplots to make sure direction of associations are consistent for all variables
@@ -913,8 +929,8 @@ m1data <- prep_BWQS_data(ZCTA_ACS_COVID, SES_vars)
 # fit our primary model -- negative binomial
 m1 <- fit_BWQS_model(m1data$data_list, BWQS_stan_model)
 
-# model diagnostics (n_eff as % of 1750, Rhat, trace plots, acf)
-m1
+# print m1 for model diagnostics (n_eff as % of 1750, Rhat, trace plots, acf)
+# m1
 min(summary(m1)$summary[,"n_eff"]/1750) # effective sample size is at worst 78%
 traceplot(m1, pars = c("beta1", "W"))
 stan_ac(m1, pars = c("beta1", "W"))
@@ -1209,6 +1225,7 @@ if(export.figs) ggsave(plot = fig4, filename = file.path(fig.path, paste0("fig4"
 Below_25th_zctas <- ZCTA_BQWS %>%
   filter(BWQS_index<quantile(BWQS_index, .25))
 
+#+ warning=FALSE
 Race_Ethncity_below25th <- Demographics %>%
   filter(zcta %in% Below_25th_zctas$zcta) %>%
   dplyr::select(-zcta, -MODZCTA) %>% 
@@ -1278,6 +1295,7 @@ sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
 sfig2
 if(export.figs) ggsave(sfig2, filename = file.path(fig.path, paste0("sfig2","_",Sys.Date(),".png")), device = "png", dpi = 500, width = 12, height = 6)
 
+#' # BWQS by Tract
 #### BWQS by Tract ####
 
 get_tract_vars_by_zcta <- function(tract_vars, modzcta_tract_crosswalk, whichq){
@@ -1351,6 +1369,7 @@ bind_rows(Summarize_BWQS_performance(m1, SES_zcta_median_testing),
 )
 
 
+#' # Part 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores
 #### Part 2: Compare capacity to socially distance (as measured by transit data) by neighborhood-level risk scores ####  
 
 UHF_ZipCodes1 <- UHF_ZipCodes %>%
@@ -1490,6 +1509,7 @@ sfig5
 if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png")), dpi = 500)
 
 
+#' # Part 3: Spatial analysis of mortality in relation to BWQS scores
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
 
 # Step 1: Create dataframes with the relevant information 
@@ -1555,6 +1575,7 @@ lm.morantest(fit.nb.ny.sens, listw = ny.wt6)
 me.fit.sens <- spatialreg::ME(deaths_count~offset(log(total_pop1))+BWQS_index,
                               spdat.sens@data, family=negative.binomial(fit.nb.ny.sens$theta), listw = ny.wt6, verbose=T, alpha=.1, nsim = 999)
 
+#' warning=FALSE
 # Step 2c: Pull out these fits and visualize the autocorrelation
 fits.sens <- data.frame(fitted(me.fit.sens))
 spdat.sens$me16 <- fits.sens$vec16
@@ -1594,6 +1615,7 @@ sfig10
 if(export.figs) ggsave(sfig10, filename = file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png")), 
                        dpi = 300, width = 5, height = 3.2)
 
+#' # Sensitivity Analyses
 #### Sensitivity Analyses ####
 
 # half-Cauchy prior for overdispersion parameter
@@ -1664,6 +1686,7 @@ bind_rows(Compare_Metrics %>%
             mutate(parameter = "RMSE"))
 
 
+#' # Subway analyses
 #### Subway analyses ####
 
 # Different BWQS groupings for subway analysis (<.25, .25-.75, .75)
@@ -1843,9 +1866,10 @@ sfig6
 if(export.figs) ggsave(sfig6 , filename = file.path(fig.path, paste0("sfig6 ", "_", Sys.Date(),".png")), dpi = 600, width = 8, height = 6)
 
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
-source(here("code/mta_vs_google.R"))
+source(here("code/mta_vs_google.R"), echo = FALSE)
 mobplot
 
-#### Appendix
+#' # Appendix
+#### Appendix #### 
 Sys.time()
 sessioninfo::session_info()
