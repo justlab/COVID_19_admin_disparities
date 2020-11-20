@@ -1430,7 +1430,7 @@ sfig6 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridersh
   geom_line(aes(x = DRM_mean_predictions$date, y = DRM_mean_predictions$Prediction), color = "red") + 
   theme_bw(base_size = 16) +
   xlab("Date") +
-  ylab("Relative Subway Use (%)")
+  scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent) 
 if(export.figs) ggsave(sfig6, filename = file.path(fig.path, paste0("sfig6", "_", Sys.Date(), ".png")), device = "png", dpi = 400, width = 8, height = 5)
 #' ![](`r file.path(fig.path, paste0("sfig6", "_", Sys.Date(), ".png"))`)
 
