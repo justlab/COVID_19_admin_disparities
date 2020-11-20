@@ -1000,13 +1000,20 @@ labels2 <- c("phi" = "Overdispersion",
              "delta3" = "Testing ratio: spline term 3",
              labels1)
 
-# create a table of parameter estimates
+# Supplemental Table 2: Parameter estimates, credible intervals, and diagnostics from main BWQS infections model
 BWQS_params %>% bind_cols(., "terms" = labels2) %>%
   dplyr::select(-label) %>%
   mutate_at(vars(1:6), ~round(., 3)) %>%
-  mutate_at(vars(5), ~round(., 0)) %>%
-  kbl(caption = paste0("Negative Binomial BWQS")) %>%
-  kable_classic(full_width = F, html_font = "Cambria")
+  mutate_at(vars(5), ~round(., 0)) %>% 
+  mutate(`95% CrI`=paste0("(",format(`2.5%`, nsmall=3),", ",format(`97.5%`, nsmall=3),")")) %>% 
+  mutate(terms = 
+           case_when(terms=="BWQS term" ~ "COVID-19 inequity index",
+                     TRUE               ~ terms)) %>%
+  dplyr::select(-`2.5%`, -`97.5%`) %>%
+  rename(median=`50%`) %>%
+  dplyr::select(terms, mean, `95% CrI`, median, Rhat, n_eff) %>%
+  kbl(align=rep('r', 6), font_size = 9.5) %>%
+  kable_classic(full_width = F, html_font = "Arial")
 
 # create a figure with parameter estimates for the weights
 fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, ymax=upper)) +
