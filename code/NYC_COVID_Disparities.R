@@ -704,8 +704,7 @@ fig3b <- MODZCTA_NYC_shp1 %>%
            expand = FALSE) +
   theme_bw(base_size = 6) + 
   theme_smallmaps
-  
-fig3b
+
 
 #' # Create data frames of all above information
 #### Create data frames of all above information ####
@@ -1156,7 +1155,6 @@ testing_scatter <- ggplot(sim_testing_df, aes(x = x)) +
   scale_y_continuous("Infections per 100,000", label=comma)
 testing_scatter <- ggExtra::ggMarginal(testing_scatter, type = "histogram", fill = "grey40", margins = "both",
                                        xparams = list(binwidth = 0.005), yparams = list(binwidth = 200))
-testing_scatter
 if(export.figs) {
   png(filename = file.path(fig.path, paste0("sfig2_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
   print(testing_scatter)
@@ -1199,7 +1197,6 @@ fig3a <- ggplot() +
         axis.ticks = element_blank(),
         axis.title.y = element_blank(),
         axis.title.x = element_blank())
-fig3a
 
 # Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data_scaled %>% 
@@ -1582,7 +1579,6 @@ fig3c <- ZCTA_BWQS_COVID_shp1 %>%
   theme_bw(base_size = 6) + 
   theme_smallmaps
 
-fig3c
 
 # Combine subfigures to make Figure 3: maps of BWQS, Tests, and Mortality by ZCTA
 fig3a_2 = fig3a + labs(tag = "a") + theme(plot.tag.position = c(-0.018, 0.985), plot.tag = element_text(face = "bold", size = 15))
@@ -1596,6 +1592,7 @@ grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1),
              arrangeGrob(fig3b_2, fig3c_2, ncol = 2, nrow = 1),
              nrow = 2, ncol = 1, heights = c(1.9,1))
 dev.off()
+#' ![](`r file.path(fig.path, paste0("fig3_combined_", Sys.Date(), ".png"))`)
 
 # Step 2: Run negative binomial model with spatial filtering  
 
@@ -1890,7 +1887,7 @@ Subway_BWQS_ZCTA_df2 <- Subway_BWQS_ZCTA_df1 %>%
 
 # Supplementary Figure 8
 sfig8 <- ggplot() + 
-  geom_jitter(data = Subway_BWQS_ZCTA_df2, aes(x = date, y = usage.median.ratio, color = Risk), size = 0.6, alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
+  geom_jitter(data = Subway_BWQS_ZCTA_df2, aes(x = date, y = usage.median.ratio, color = Risk), size = 0.3, alpha = 0.3, position = position_jitter(height = 0, width = 0.42))+ 
   geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "Mid (IQR)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "Low (≤ 25%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
