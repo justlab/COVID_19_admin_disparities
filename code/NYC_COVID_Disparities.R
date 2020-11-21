@@ -1143,11 +1143,11 @@ testing_scatter <- ggExtra::ggMarginal(testing_scatter, type = "histogram", fill
                                        xparams = list(binwidth = 0.005), yparams = list(binwidth = 200))
 testing_scatter
 if(export.figs) {
-  png(filename = file.path(fig.path, paste0("Sfig2_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
+  png(filename = file.path(fig.path, paste0("sfig2_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
   print(testing_scatter)
   dev.off()
 }
-#' ![](`r file.path(fig.path, paste0("Sfig2_", Sys.Date(), ".png"))`)
+#' ![](`r file.path(fig.path, paste0("sfig2_", Sys.Date(), ".png"))`)
 
 # Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
 
@@ -1885,7 +1885,7 @@ sfig8 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-if(export.figs) ggsave(sfig8 , filename = file.path(fig.path, paste0("sfig8 ", "_", Sys.Date(),".png")), 
+if(export.figs) ggsave(sfig8 , filename = file.path(fig.path, paste0("sfig8", "_", Sys.Date(),".png")), 
                        dpi = 300, width = 8, height = 6)
 #' ![](`r file.path(fig.path, paste0("sfig8", "_", Sys.Date(),".png"))`)
 
