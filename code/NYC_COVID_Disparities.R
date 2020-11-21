@@ -823,18 +823,28 @@ modzcta_to_tract2 <- dplyr::select(tract_modzcta_pop, -total_pop1)
 #' # Part 1: Creation of BWQS Neighborhood Infection Risk Scores
 #### Part 1: Creation of BWQS Neighborhood Infection Risk Scores ####
 
-# Step 1: Create univariate scatterplots to make sure direction of associations are consistent for all variables
-ggplot(ZCTA_ACS_COVID, aes(x = testing_ratio, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") #covariate
-ggplot(ZCTA_ACS_COVID, aes(x = one_over_medincome, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
-ggplot(ZCTA_ACS_COVID, aes(x = not_insured, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID, aes(x = one_over_grocers_per_1000, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
-ggplot(ZCTA_ACS_COVID, aes(x = unemployed, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID, aes(x = res_vol_popdensity, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID, aes(x = didnot_workhome_commute, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID, aes(x = not_quarantined_jobs, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID, aes(x = avg_hhold_size, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm")
-ggplot(ZCTA_ACS_COVID, aes(x = essentialworker_drove, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
-ggplot(ZCTA_ACS_COVID, aes(x = essentialworker_pubtrans, y = pos_per_100000)) + geom_point() + geom_smooth(method = "lm") 
+# Step 1: Create univariate scatterplots with negative binomial linear smoothers
+# to make sure direction of associations are consistent for all variables
+# Visualize the non-linear relationship between infection rate and test_ratio (not adjusted for social inequity)
+# infections versus testing ratio with smoothers; this covariate is not quantiled so the shape of association is important
+ggplot(ZCTA_ACS_COVID, aes(x = testing_ratio, y = pos_per_100000)) + geom_point() +
+  ylab("infections per 100,000") +
+  geom_smooth(color = "red", formula = y ~ x, method = "glm.nb") +
+  stat_smooth(color = "green", method = "gam", formula = y ~ s(x), method.args = list(family = "nb"), se = F) +
+  geom_smooth(method = "glm.nb", formula = y ~ splines::ns(x, 3), se = FALSE) + theme_bw()
+# 10 social variables
+plotsocial <- ggplot(ZCTA_ACS_COVID, aes(y = pos_per_100000)) + 
+  geom_point() + geom_smooth(color = "red", formula = y ~ x, method = "glm.nb") + ylab("infections per 100,000") + theme_bw()
+plotsocial %+% aes(x = one_over_medincome)
+plotsocial %+% aes(x = not_insured)
+plotsocial %+% aes(x = one_over_grocers_per_1000)
+plotsocial %+% aes(x = unemployed)
+plotsocial %+% aes(x = res_vol_popdensity)
+plotsocial %+% aes(x = didnot_workhome_commute)
+plotsocial %+% aes(x = not_quarantined_jobs)
+plotsocial %+% aes(x = avg_hhold_size)
+plotsocial %+% aes(x = essentialworker_drove)
+plotsocial %+% aes(x = essentialworker_pubtrans)
 
 
 SES_vars <- names(ZCTA_ACS_COVID %>% dplyr::select(one_over_medincome, not_insured, one_over_grocers_per_1000, unemployed, 
@@ -850,7 +860,14 @@ Cors_SESVars2 <- gather(data = Cors_SESVars1, key = "var2", value = "correlation
 
 Cors_SESVars2 %>% arrange(desc(correlation)) %>% distinct(correlation, .keep_all = T) 
 
-corrplot(Cors_SESVars, p.mat = Cors_SESVars, insig = "p-value", type = "lower", sig.level = -1, tl.col = "black", tl.srt = 45)
+
+if(export.figs) {
+  png(filename = file.path(fig.path, paste0("sfig1_", Sys.Date(), ".png")), width = 96*7, height = 96*7)
+  corrplot(Cors_SESVars, p.mat = Cors_SESVars, insig = "p-value", type = "lower", 
+         sig.level = -1, tl.col = "black", tl.srt = 45)
+  dev.off()
+}
+#' ![](`r file.path(fig.path, paste0("sfig1_", Sys.Date(), ".png"))`)
 
 # Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
 bind_cols(Variables = SES_vars,
@@ -943,8 +960,11 @@ round(Compute_Bayes_R2(m1)$upperr2, 2)
 # residual analysis with DHARMa
 residuals_qq <- createDHARMa(simulatedResponse = t(extract(m1,"y_new")$y_new), observedResponse = m1data$data_list$y)
 #plotQQunif(residuals_qq, testOutliers = F, testDispersion = F) #base graphics
+#+ fig.keep = "none"
 ks_unif <- testUniformity(residuals_qq)
+#+ fig.keep = "none"
 residuals_qq_unif <- gap::qqunif(residuals_qq$scaledResiduals,pch=2,bty="n", logscale = F, col = "black", cex = 0.6, main = "QQ plot residuals", cex.main = 1)
+#+ fig.width=3.5
 sfig3_qq <- ggplot(data.frame(x = residuals_qq_unif$x, y = residuals_qq_unif$y)) +
   geom_abline(linetype = "dashed", color = "blue") +
   scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
@@ -1044,14 +1064,6 @@ ggplot(data.frame(BWQS_index = BWQS_index$BWQS_index, testing_ratio = ZCTA_ACS_C
 # BWQS is correlated with testing_ratio
 cor.test(BWQS_index$BWQS_index, ZCTA_ACS_COVID$testing_ratio, method = "spearman")  
 
-# Visualize the non-linear relationship between infection rate and test_ratio (not adjusted for social inequity)
-# infections versus testing ratio with smoothers
-ggplot(data.frame(y = ZCTA_ACS_COVID$pos_per_100000, testing_ratio = ZCTA_ACS_COVID$testing_ratio), aes(testing_ratio, y)) + geom_point() +
-  ylab("infections per 100,000") +
-  geom_smooth(color = "red", formula = y ~ x, method = "glm.nb") +
-  stat_smooth(color = "green", method = "gam", formula = y ~ s(x), method.args = list(family = "nb"), se = F) +
-  geom_smooth(method = "glm.nb", formula = y ~ splines::ns(x, 3), se = FALSE)
-
 # Partial regression plot for BWQS index
 # shows a nice linear relationship of BWQS index with infections after adjustment for testing
 nb_testing_ns3df <- glm.nb(m1data$data_list$y ~ m1data$K)
@@ -1065,11 +1077,15 @@ summary(lm(yresid ~ bwqsresid))
 rm(nb_testing_ns3df, yresid, bwqs_testing_ns3df, bwqsresid)
 
 # Visualize the full model observed vs predicted -- shows a close relationship (which is why R2 is so high)
-ggplot(data.frame(pred = colMeans(extract(m1,"y_new")$y_new), m1data$data_list$y), aes(pred, m1data$data_list$y)) + 
+preddf <- data.frame(data.frame(pred = colMeans(extract(m1,"y_new")$y_new), y = m1data$data_list$y))
+ggplot(preddf, aes(pred, y)) + 
   geom_point() +  
   geom_abline(linetype = "dashed", color = "grey10") + 
-  coord_fixed() + 
-  theme(aspect.ratio=1)
+  coord_fixed(ratio = 1) + 
+  scale_x_continuous("Predicted Infections per 100,000", label=comma, limits = range(preddf)) + 
+  scale_y_continuous("Infections per 100,000", label=comma) + 
+  theme_bw()
+rm(preddf)
 
 # calculate credible interval over the mean predicted infections
 # at the median testing_ratio
@@ -1123,7 +1139,6 @@ BWQS_scatter <- ggplot(sim_bwqs_df, aes(x = bwqs_seq)) +
   scale_y_continuous("Infections per 100,000", label=comma)
 BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", fill = "grey40", margins = "both", 
                                     xparams = list(binwidth = 0.5), yparams = list(binwidth = 200))
-BWQS_scatter
 if(export.figs) {
   png(filename = file.path(fig.path, paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
   print(BWQS_scatter)
@@ -1597,7 +1612,7 @@ lm.morantest(fit.nb.ny.sens, listw = ny.wt6)
 me.fit.sens <- spatialreg::ME(deaths_count~offset(log(total_pop1))+BWQS_index,
                               spdat.sens@data, family=negative.binomial(fit.nb.ny.sens$theta), listw = ny.wt6, verbose=T, alpha=.1, nsim = 999)
 
-#' warning=FALSE
+#+ warning=FALSE
 # Step 2c: Pull out these fits and visualize the autocorrelation
 fits.sens <- data.frame(fitted(me.fit.sens))
 spdat.sens$me16 <- fits.sens$vec16
@@ -1605,6 +1620,7 @@ spdat.sens$me23 <- fits.sens$vec23
 spplot(spdat.sens, "me16", at=quantile(spdat.sens$me16, p=seq(0,1,length.out = 7)))
 spplot(spdat.sens, "me23", at=quantile(spdat.sens$me23, p=seq(0,1,length.out = 7)))
 
+#+ warning=FALSE
 # Step 2d: Include the fits in our regression model as an additional parameter
 clean.nb.sens<-glm.nb(deaths_count~offset(log(total_pop1))+BWQS_index+fitted(me.fit.sens), spdat.sens@data)
 tidy(clean.nb.sens) %>% mutate(estimate_exp = exp(estimate))
@@ -1890,6 +1906,7 @@ if(export.figs) ggsave(sfig8 , filename = file.path(fig.path, paste0("sfig8", "_
 #' ![](`r file.path(fig.path, paste0("sfig8", "_", Sys.Date(),".png"))`)
 
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
+#+ message=FALSE
 source(here("code/mta_vs_google.R"), echo = FALSE)
 mobplot
 
