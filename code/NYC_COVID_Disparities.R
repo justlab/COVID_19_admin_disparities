@@ -1300,7 +1300,7 @@ labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percen
 labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percentile BWQS" = "Below 25th\n%ile index", 
                          "Between 25-75th percentile BWQS" = "Between 25-75th\n%ile index", "Above 75th percentile BWQS" = "Above 75th\n%ile index")
 
-sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) + 
+sfig4 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) + 
     geom_rect(data = subset(Demographics_by_BWQS, Group=="NYC Population"), 
             aes(xmin=as.numeric(Group)-.35,xmax=as.numeric(Group)+.35, ymin=0, ymax=100, fill="gray85"), color = "gray", alpha = .1) +
   geom_bar(data = subset(Demographics_by_BWQS, Group!="NYC Population"), position="stack", stat="identity", width = .75) +
@@ -1317,9 +1317,9 @@ sfig2 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
         axis.text.y = element_text(size = 16),
         axis.text.x = element_text(size = 16, color = "black"), 
         axis.title.x = element_blank()) 
-if(export.figs) ggsave(sfig2, filename = file.path(fig.path, paste0("sfig2","_",Sys.Date(),".png")), device = "png",
+if(export.figs) ggsave(sfig4, filename = file.path(fig.path, paste0("sfig4","_",Sys.Date(),".png")), device = "png",
                        dpi = 300, width = 12, height = 6)
-#' ![](`r file.path(fig.path, paste0("sfig2","_",Sys.Date(),".png"))`)
+#' ![](`r file.path(fig.path, paste0("sfig4","_",Sys.Date(),".png"))`)
 
 #' # BWQS by Tract
 #### BWQS by Tract ####
@@ -1890,7 +1890,7 @@ Subway_BWQS_ZCTA_df2 <- Subway_BWQS_ZCTA_df1 %>%
 
 # Supplementary Figure 8
 sfig8 <- ggplot() + 
-  geom_jitter(data = Subway_BWQS_ZCTA_df2, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
+  geom_jitter(data = Subway_BWQS_ZCTA_df2, aes(x = date, y = usage.median.ratio, color = Risk), size = 0.6, alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
   geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "Mid (IQR)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
   geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "Low (≤ 25%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +

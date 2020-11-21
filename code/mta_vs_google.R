@@ -86,7 +86,7 @@ mobplot <- ggplot(comp_long[!is.na(relative_use)],
         legend.spacing = unit(1, "points"), legend.box="horizontal") 
 
 plotres = 300
-fig_outpath = file.path(fig.path, paste0("sfig_mobility_", Sys.Date(),".png"))
+fig_outpath = file.path(fig.path, paste0("sfig9_mobility_", Sys.Date(),".png"))
 message("Writing ", fig_outpath)
 agg_png(filename = fig_outpath, 
         width = plotres*6, height = plotres*4, scaling = 3.3)
