@@ -1543,6 +1543,7 @@ if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_"
                        dpi = 300, width = 4, height = 4)
 #' ![](`r file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png"))`)
 
+
 #' # Part 3: Spatial analysis of mortality in relation to BWQS scores
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
 
@@ -1649,6 +1650,7 @@ sfig10 <- ggplot() +
 if(export.figs) ggsave(sfig10, filename = file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png")), 
                        dpi = 300, width = 5, height = 3.2)
 #' ![](`r file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png"))`)
+
 
 #' # Sensitivity Analyses
 #### Sensitivity Analyses ####
