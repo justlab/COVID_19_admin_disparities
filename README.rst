@@ -19,7 +19,10 @@ The following packages are available via remotes::install_github(“justlab/Just
 Example output
 ============================================================
 
-Example output from code/NYC_COVID_Disparities.R is located: ****INSERT LINK HERE. Processing and analysis time on a personal computer was ****INSERT TIME HERE.  
+Example output from code/NYC_COVID_Disparities.R is located: **INSERT LINK HERE**.
+
+| Processing and analysis time on a personal computer was **INSERT TIME HERE**. 
+| On a server (2x Intel Xeon E5-2640 v3) connected to an enterprise 1 Gbit/s network, total processing time was 52 minutes, 19 minutes of which was predominantly downloading data.  
 
 License
 ============================================================
