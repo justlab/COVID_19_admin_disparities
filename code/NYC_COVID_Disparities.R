@@ -1,5 +1,8 @@
 #/* This script contains inline R Markdown for added legibility when using knitr::spin 
 # or compiling a report in R Studio. R Markdown lines begin with #', #+, or #/* */
+
+t_start = Sys.time()
+
 #+ message=FALSE
 # CRAN packages:
 library(tidyverse)
@@ -61,6 +64,8 @@ if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){
 }
 library(MTA.turnstile)
 
+t_turnstile = Sys.time()
+
 # output path for figures
 fig.path = here("figures")
 if(!dir.exists(fig.path)) dir.create(fig.path)
@@ -78,7 +83,7 @@ pm = function(...) pairmemo(
 
 # To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
 #census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
-if(Sys.getenv("CENSUS_API_KEY")=="") warning("Census API Key Missing")
+if(Sys.getenv("CENSUS_API_KEY")=="") stop("Census API Key Missing")
 
 #### Functions ####
 #' # Functions
@@ -522,6 +527,7 @@ acs_tracts <- acs.main("tract", "NY", TRUE)
 acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
 acs_tracts_commute1 = as.data.frame(acs.essential("tract", state_unit = "NY"))
 
+t_census = Sys.time()
 
 #' # Grocery stores per area
 #### Grocery stores per area ####
@@ -942,8 +948,12 @@ prep_BWQS_data <- function(df, ses_varnames){
 
 m1data <- prep_BWQS_data(ZCTA_ACS_COVID, SES_vars)
 
+t_dataprep = Sys.time()
+
 # fit our primary model -- negative binomial
 m1 <- fit_BWQS_model(m1data$data_list, BWQS_stan_model)
+
+t_m1 = Sys.time()
 
 # print m1 for model diagnostics (n_eff as % of 1750, Rhat, trace plots, acf)
 # m1
@@ -1318,6 +1328,8 @@ if(export.figs) ggsave(sfig4, filename = file.path(fig.path, paste0("sfig4","_",
                        dpi = 300, width = 12, height = 6)
 #' ![](`r file.path(fig.path, paste0("sfig4","_",Sys.Date(),".png"))`)
 
+t_postm1 = Sys.time()
+
 #' # BWQS by Tract
 #### BWQS by Tract ####
 
@@ -1363,6 +1375,8 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
 m2data_median <- prep_BWQS_data(SES_zcta_median_testing, SES_vars_median)
 m2_median <- fit_BWQS_model(data_list = m2data_median$data_list, stan_model_path = BWQS_stan_model)
 
+t_m2 = Sys.time()
+
 # Select third quartile tract values by MODZCTA, weighted by residential address share and population density by tract
 SES_zcta_3q <- get_tract_vars_by_zcta(tract_vars, modzcta_to_tract2, "3q")
 SES_vars_3q = names(SES_zcta_3q)[names(SES_zcta_3q) != "MODZCTA"]
@@ -1373,6 +1387,8 @@ SES_zcta_3q_testing <- ZCTA_ACS_COVID %>%
 #BWQS using the 3rd quartile at the tract level 
 m2data_3q <- prep_BWQS_data(SES_zcta_3q_testing, SES_vars_3q)
 m2_3q <- fit_BWQS_model(data_list = m2data_3q$data_list, stan_model_path = BWQS_stan_model)
+
+t_m3 = Sys.time() 
 
 Summarize_BWQS_performance <- function(model, df){
          model_type = deparse(substitute(model))
@@ -1911,5 +1927,21 @@ mobplot
 
 #' # Appendix
 #### Appendix #### 
-Sys.time()
+t_final = Sys.time()
+
+#' # Runtimes
+print(t_start)
+print(t_turnstile)
+print(t_census)
+print(t_dataprep)
+print(t_m1)
+print(t_postm1)
+print(t_m2)
+print(t_m3)
+print(t_final)
+print(t_final - t_start)
+print(t_turnstile - t_start)
+print(t_census - t_turnstile)
+print(t_final - t_census)
+
 sessioninfo::session_info()
