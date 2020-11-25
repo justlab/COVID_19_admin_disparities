@@ -81,6 +81,10 @@ if(!dir.exists(fig.path)) dir.create(fig.path)
 export.figs = TRUE 
 if(export.figs) message("Saving figures to:\n ", fig.path) else message("Not saving figures")
 
+# To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
+#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
+if(Sys.getenv("CENSUS_API_KEY")=="") stop("Census API Key Missing")
+
 # pairmemo function cache
 pairmemo.dir = file.path(data.root, "pairmemo")
 dir.create(pairmemo.dir, showWarnings = F)
@@ -89,9 +93,21 @@ pm = function(...) pairmemo(
     n.frame = 2,
     ...)
 
-# To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
-#census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
-if(Sys.getenv("CENSUS_API_KEY")=="") stop("Census API Key Missing")
+#+ pairmemo_info
+#' ## About pairmemo:
+#' `pairmemo` caches the results of functions on disk based on their input parameters.   
+#' If you run this script and then make changes to code, we recommend that you
+#' clear the pairmemo cache of any functions that run in the lines following
+#' your change before running the script again.  
+#' The following commented lines would clear the pairmemo cache for each
+#' function. If you do not change the input Census or Pluto data, you would
+#' likely only need to run the last one.  
+#pairmemo.clear(get.Pluto)
+#pairmemo.clear(get.qn.blocks)
+#pairmemo.clear(acs.main)
+#pairmemo.clear(get_essential_acs)
+#pairmemo.clear(get.tract.res)
+#pairmemo.clear(fit_BWQS_model)
 
 #### Functions ####
 #' # Functions
