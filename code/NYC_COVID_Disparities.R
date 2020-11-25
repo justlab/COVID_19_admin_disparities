@@ -83,7 +83,7 @@ if(export.figs) message("Saving figures to:\n ", fig.path) else message("Not sav
 
 # To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
 #census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
-if(Sys.getenv("CENSUS_API_KEY")=="") stop("Census API Key Missing")
+if(Sys.getenv("CENSUS_API_KEY")=="") warning("Census API Key Missing")
 
 # pairmemo function cache
 pairmemo.dir = file.path(data.root, "pairmemo")
@@ -109,8 +109,8 @@ pm = function(...) pairmemo(
 #pairmemo.clear(get.tract.res)
 #pairmemo.clear(fit_BWQS_model)
 
-#### Functions ####
 #' # Functions
+#### Functions ####
 
 read_w_filenames <- function(flnm) {
   read_csv(flnm) %>%
