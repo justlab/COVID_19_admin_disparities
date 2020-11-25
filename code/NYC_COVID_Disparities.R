@@ -1,3 +1,11 @@
+#' ---
+#' title: "NYC COVID-19 Social Disparities"
+#' author: "Carrión et al."
+#' output:
+#'   html_document:
+#'     toc: true
+#'     toc_depth: 2
+#' ---
 #/* This script contains inline R Markdown for added legibility when using knitr::spin 
 # or compiling a report in R Studio. R Markdown lines begin with #', #+, or #/* */
 
@@ -64,7 +72,7 @@ if(Sys.getenv("MTA_TURNSTILE_DATA_DIR") == ""){
 }
 library(MTA.turnstile)
 
-t_turnstile = Sys.time()
+t_turnstile_1 = Sys.time()
 
 # output path for figures
 fig.path = here("figures")
@@ -128,6 +136,11 @@ download = function(url, to, f, ...){
 #' # Load Data
 #### Load Data ####
 
+#' Progress bars are a single line when run interactively, but print every refresh with knitr 
+# Subway ridership data
+Subway_ridership_by_UHF <- relative.subway.usage(2020L, "nhood")
+t_turnstile_2 = Sys.time()
+
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
 pm(fst = T,
 get.Pluto <- function() download(
@@ -182,8 +195,6 @@ ZCTA_test_series <- ZCTA_test_download %>%
   mutate(date = as.Date(str_extract(filename, "[:digit:]{4}-[:digit:]{2}-[:digit:]{2}"))) %>%
   dplyr::select(-filename)
 
-# Subway ridership data
-Subway_ridership_by_UHF <- relative.subway.usage(2020L, "nhood")
 
 # UHF definitions by zip codes
 UHF_ZipCodes <- UHF_ZipCodes <- download(
@@ -1557,9 +1568,9 @@ sfig5 <- ggplot() +
 #+ warning=FALSE
 if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png")), 
                        dpi = 300, width = 4, height = 4)
-#' ![](`r file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png"))`)
+#' ![](`r file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png"))`)  
 
-
+#' 
 #' # Part 3: Spatial analysis of mortality in relation to BWQS scores
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
 
@@ -1929,9 +1940,10 @@ mobplot
 #### Appendix #### 
 t_final = Sys.time()
 
-#' # Runtimes
+#' ## Runtimes
 print(t_start)
-print(t_turnstile)
+print(t_turnstile_1)
+print(t_turnstile_2)
 print(t_census)
 print(t_dataprep)
 print(t_m1)
@@ -1939,9 +1951,18 @@ print(t_postm1)
 print(t_m2)
 print(t_m3)
 print(t_final)
+
+# Total runtime:
 print(t_final - t_start)
-print(t_turnstile - t_start)
-print(t_census - t_turnstile)
+# Time part 1: Script start through loading of MTA Turnstile package:
+print(t_turnstile_1 - t_start)
+# Time part 2: Downloading (if this is the first run) and processing of subway turnstile data by neighborhood:
+print(t_turnstile_2 - t_turnstile_1)
+# Time part 3: Downloading of all other data and processing of Census data:
+print(t_census - t_turnstile_2)
+# Time part 4: All other data processing, modeling, and figure generation:
 print(t_final - t_census)
 
+#' ## Session Info
+#+ sessioninfo, R.options = list(width = 100)
 sessioninfo::session_info()
