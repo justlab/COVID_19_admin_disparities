@@ -7,7 +7,7 @@ All data collection, cleaning, and analysis are conducted via code/NYC_COVID_Dis
 
 Packages and Installation
 ============================================================
-This analysis was conducted in R version 3.6.2. No specialized hardware is required. 
+This analysis was conducted in R version 4.0.2. No specialized hardware is required. 
 
 The following packages should be loaded with tidyverse 1.3.0 via CRAN: dplyr 0.8.4; forcats 0.4.0; ggplot2 3.3.1;	purrr 0.3.3; readr 1.3.1;	stringr 1.4.0; tibble 3.0.1; tidyr 1.0.2
 
