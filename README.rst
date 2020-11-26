@@ -5,24 +5,19 @@ Instructions
  
 All data collection, cleaning, and analysis are conducted via code/NYC_COVID_Disparities.R 
 
-Packages and Installation
-============================================================
-This analysis was conducted in R version 4.0.2. No specialized hardware is required. 
-
-The following packages should be loaded with tidyverse 1.3.0 via CRAN: dplyr 0.8.4; forcats 0.4.0; ggplot2 3.3.1;	purrr 0.3.3; readr 1.3.1;	stringr 1.4.0; tibble 3.0.1; tidyr 1.0.2
-
-The following packages, and their dependencies, are required and available via CRAN: sf 0.9-3; lubridate 1.7.8;	tidycensus 0.9.6; ggExtra 2.3;	ggridges 0.5.2;	rstan 2.19.3;	drc 3.0-1; spdep 1.1-3;	mgcv 1.8-31; broom 0.5.4;	MASS 7.3-51.5; spatialreg 1.1-5; here 0.1;
-pdftools 2.2;	matrixStats 0.55.0;	egg 0.4.5; ggpubr 0.2.5; scales 1.1.1
-
-The following packages are available via remotes::install_github(“justlab/Just_universal”, ref = “78812f519da11502706a5061e7b8bc4812e5c3b5”) and remotes::install_github(“justlab/MTA_turnstile”, ref = “6c8bd7690dfa6036bf991cb4504f42631e8f6756”): Just.universal; MTA.turnstile 
-
 Example output
 ============================================================
 
 Example output from code/NYC_COVID_Disparities.R is `located here <https://justlab.github.io/COVID_19_admin_disparities/code/NYC_COVID_Disparities.html>`_.  
 
-| Processing and analysis time on a personal computer was **INSERT TIME HERE**. 
+| Processing and analysis time on a personal computer was **INSERT TIME HERE**.  
 | On a server (2x Intel Xeon E5-2640 v3) connected to an enterprise 1 Gbit/s network, total processing time was 52 minutes, 19 minutes of which was predominantly downloading data.  
+
+Packages and Installation
+============================================================
+This analysis was conducted in R version 4.0.2. No specialized hardware is required. 
+
+When you open the project in RStudio or start an R session in the project directory, the :code:`renv` package will be installed if it is not already available. You can then install the same versions of R packages as was used for the analysis by running :code:`renv::restore()`.  
 
 License
 ============================================================
