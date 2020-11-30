@@ -64,11 +64,11 @@
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteRepo": "Just_universal",
       "RemoteUsername": "justlab",
+      "RemoteRepo": "Just_universal",
       "RemoteRef": "master",
-      "RemoteSha": "4e6147af2b08cbfbae033c95fb83e21f8a5d5b53",
-      "Hash": "33c6f3fcc169b652780f682955752c1f"
+      "RemoteSha": "45762c3c86d5d32cb3867362dfd5b4ab61a22c9b",
+      "Hash": "0533fdc03b0a6c8f1039692aaf4b0f70"
     },
     "KernSmooth": {
       "Package": "KernSmooth",
@@ -145,6 +145,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "e031418365a7f7a766181ab5a41a5716"
+    },
+    "RSQLite": {
+      "Package": "RSQLite",
+      "Version": "2.2.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "66fe0e309e72a1d0f9cceed5c01fab94"
     },
     "Rcpp": {
       "Package": "Rcpp",
@@ -257,6 +264,20 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "543776ae6848fde2f48ff3816d0628bc"
+    },
+    "bit": {
+      "Package": "bit",
+      "Version": "4.0.4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "f36715f14d94678eea9933af927bc15d"
+    },
+    "bit64": {
+      "Package": "bit64",
+      "Version": "4.0.5",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "9fe98599ca456d6552421db0d6772d8f"
     },
     "bitops": {
       "Package": "bitops",
@@ -944,6 +965,13 @@
       "Repository": "CRAN",
       "Hash": "d16f18aeb023d7a80c090d9458fc75a6"
     },
+    "memoise": {
+      "Package": "memoise",
+      "Version": "1.1.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "58baa74e4603fcfb9a94401c58c8f9b1"
+    },
     "mgcv": {
       "Package": "mgcv",
       "Version": "1.8-31",
@@ -1097,6 +1125,13 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "b6b150cd4709e0c0c9b5d51ac4376282"
+    },
+    "plogr": {
+      "Package": "plogr",
+      "Version": "0.2.0",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "09eb987710984fc2905c7129c7d85e65"
     },
     "plotrix": {
       "Package": "plotrix",
@@ -1296,10 +1331,10 @@
     },
     "rmarkdown": {
       "Package": "rmarkdown",
-      "Version": "2.3",
+      "Version": "2.5",
       "Source": "Repository",
       "Repository": "CRAN",
-      "Hash": "202260e1b2c410edc086d5b8f1ed946e"
+      "Hash": "20a0a94af9e8f7040510447763aab3e9"
     },
     "rpart": {
       "Package": "rpart",
