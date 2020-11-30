@@ -95,8 +95,8 @@
       "Package": "MTA.turnstile",
       "Version": "0.0.0.9001",
       "Source": "GitHub",
-      "Remotes": "github::justlab/Just_universal",
       "RemoteType": "github",
+      "Remotes": "github::justlab/Just_universal",
       "RemoteHost": "api.github.com",
       "RemoteRepo": "MTA_turnstile",
       "RemoteUsername": "justlab",
@@ -279,13 +279,6 @@
       "Repository": "CRAN",
       "Hash": "bd51734a754b6c2baf28b2d1ebc11e91"
     },
-    "brew": {
-      "Package": "brew",
-      "Version": "1.0-6",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "92a5f887f9ae3035ac7afde22ba73ee9"
-    },
     "broom": {
       "Package": "broom",
       "Version": "0.5.6",
@@ -391,13 +384,6 @@
       "Repository": "CRAN",
       "Hash": "98ca919385a634e5d558e6938755e0bf"
     },
-    "colourvalues": {
-      "Package": "colourvalues",
-      "Version": "0.3.5",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "eec3f6df8e50ddc32365012bff8c00f0"
-    },
     "commonmark": {
       "Package": "commonmark",
       "Version": "1.7",
@@ -432,13 +418,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "0d57bc8e27b7ba9e45dba825ebc0de6b"
-    },
-    "crosstalk": {
-      "Package": "crosstalk",
-      "Version": "1.1.0.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "ae55f5d7c02f0ab43c58dd050694f2b4"
     },
     "curl": {
       "Package": "curl",
@@ -615,26 +594,12 @@
       "Repository": "CRAN",
       "Hash": "465ccb84427f5fe2c54f8620666db131"
     },
-    "gdtools": {
-      "Package": "gdtools",
-      "Version": "0.2.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "38f4026c0d09edb3a4474685cef68342"
-    },
     "generics": {
       "Package": "generics",
       "Version": "0.0.2",
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "b8cff1d1391fd1ad8b65877f4c7f2e53"
-    },
-    "geojsonsf": {
-      "Package": "geojsonsf",
-      "Version": "2.0.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "26519a4f3231dc58fcfb2e931c0ca502"
     },
     "ggExtra": {
       "Package": "ggExtra",
@@ -719,13 +684,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "beb8ca96406a2828f25e49ab17001c39"
-    },
-    "googlePolylines": {
-      "Package": "googlePolylines",
-      "Version": "0.7.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "d947d05b3f3afaa3457e3cda9044ee50"
     },
     "gridExtra": {
       "Package": "gridExtra",
@@ -853,13 +811,6 @@
       "Repository": "CRAN",
       "Hash": "bc316c003aba520fc73d70ad53b5fc36"
     },
-    "jsonify": {
-      "Package": "jsonify",
-      "Version": "1.2.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "f435875f0eb7de52ade944ed82ee9089"
-    },
     "jsonlite": {
       "Package": "jsonlite",
       "Version": "1.7.0",
@@ -908,41 +859,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "590829599d6182cf7461787af34666ee"
-    },
-    "lazyeval": {
-      "Package": "lazyeval",
-      "Version": "0.2.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "d908914ae53b04d4c0c0fd72ecc35370"
-    },
-    "leafem": {
-      "Package": "leafem",
-      "Version": "0.1.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "602b8cd1b229325c4a6625c0195e2af4"
-    },
-    "leaflet": {
-      "Package": "leaflet",
-      "Version": "2.0.3",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "3f3f5e5603fc791dfb77279ad84cc711"
-    },
-    "leaflet.providers": {
-      "Package": "leaflet.providers",
-      "Version": "1.9.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "d3082a7beac4a1aeb96100ff06265d7e"
-    },
-    "leafpop": {
-      "Package": "leafpop",
-      "Version": "0.0.5",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "8e8a7d148fbe3dbb0a0395e135e8d6f7"
     },
     "lhs": {
       "Package": "lhs",
@@ -1007,26 +923,12 @@
       "Repository": "CRAN",
       "Hash": "1bb58822a20301cee84a41678e25d9b7"
     },
-    "mapdeck": {
-      "Package": "mapdeck",
-      "Version": "0.3.3",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "0367160014cd1439c92f22132a9e407f"
-    },
     "maptools": {
       "Package": "maptools",
       "Version": "1.0-1",
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "5117ca3798362fadc2d985899b3e891e"
-    },
-    "mapview": {
-      "Package": "mapview",
-      "Version": "2.7.8",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "6f42b604b5a1b6ef540593d807be4fbc"
     },
     "markdown": {
       "Package": "markdown",
@@ -1308,13 +1210,6 @@
       "Repository": "CRAN",
       "Hash": "34630c700bb331339a80ddc9c6821e25"
     },
-    "rapidjsonr": {
-      "Package": "rapidjsonr",
-      "Version": "1.2.0",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "88b9f48c93d17cdb811b54079a6a414f"
-    },
     "rappdirs": {
       "Package": "rappdirs",
       "Version": "0.3.1",
@@ -1349,13 +1244,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "c66b930d20bb6d858cd18e1cebcfae5c"
-    },
-    "remotes": {
-      "Package": "remotes",
-      "Version": "2.1.1",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "57c3009534f805f0f6476ffee68483cc"
     },
     "renv": {
       "Package": "renv",
@@ -1462,13 +1350,6 @@
       "Repository": "CRAN",
       "Hash": "510d1f864cd565d8119801a49db4fd85"
     },
-    "satellite": {
-      "Package": "satellite",
-      "Version": "1.0.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "ee6f12377077643b0822de5130a9f597"
-    },
     "scales": {
       "Package": "scales",
       "Version": "1.1.1",
@@ -1496,13 +1377,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "bf0ef23231efe31576e08d69772892ef"
-    },
-    "sfheaders": {
-      "Package": "sfheaders",
-      "Version": "0.2.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "d69b3f4a19888552509cebe2d116afde"
     },
     "sfsmisc": {
       "Package": "sfsmisc",
@@ -1560,13 +1434,6 @@
       "Repository": "CRAN",
       "Hash": "6b39e7a46cb47ea128892974b6083097"
     },
-    "spatialwidget": {
-      "Package": "spatialwidget",
-      "Version": "0.2.2",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "f4588b2210738a6845e0a1e8e74d7209"
-    },
     "spdep": {
       "Package": "spdep",
       "Version": "1.1-5",
@@ -1608,13 +1475,6 @@
       "Source": "Repository",
       "Repository": "CRAN",
       "Hash": "1c5bb53bd428f3c42a25b7aeb983d8c7"
-    },
-    "svglite": {
-      "Package": "svglite",
-      "Version": "1.2.3",
-      "Source": "Repository",
-      "Repository": "CRAN",
-      "Hash": "ed61a9516ba30e7ebe72855931007255"
     },
     "sys": {
       "Package": "sys",
