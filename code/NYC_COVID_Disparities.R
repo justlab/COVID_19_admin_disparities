@@ -660,7 +660,7 @@ Res_Bldg_Footprints <- Bldg_Footprints %>%
 # tract-level residential area 
 Res_Bldg_Footprints2 <- Bldg_Footprints %>% 
   st_transform(crs = 2263) %>%
-  suppressWarnings(st_centroid(of_largest_polygon = TRUE)) %>%
+  st_centroid(., of_largest_polygon = TRUE) %>%
   mutate(base_bbl = as.character(base_bbl)) %>%
   filter(base_bbl %in% ResBBLs &
            feat_code == "2100") %>%
@@ -668,8 +668,8 @@ Res_Bldg_Footprints2 <- Bldg_Footprints %>%
   left_join(., Pluto_ResOnly, by = "base_bbl") %>%
   mutate(bldg_volume = if_else(is.na(bldg_volume), shape_area*numfloors*10, bldg_volume),
          res_volume = (bldg_volume/unitstotal)*unitsres)
-pm(get.tract.res <- function(res, tracts) st_intersection(res, tracts)) # takes a few minutes
-res_bldg_tract <- get.tract.res(Res_Bldg_Footprints2, tractSF)
+get.tract.res <- function(res, tracts) st_intersection(res, tracts) 
+res_bldg_tract <- get.tract.res(Res_Bldg_Footprints2, tractSF) # 72 seconds
 res_bldg_tract_sum <- st_set_geometry(res_bldg_tract, NULL) %>%
   group_by(GEOID) %>%
   summarise(total_res_volume_tract = sum(res_volume, na.rm = TRUE))
