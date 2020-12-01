@@ -579,7 +579,7 @@ food_retail_filtered <- food_retail %>%
 
 # Geocode grocers, using a cached version if available to make analysis reproducible
 # The geocoding service may be updated in the future and give different results
-cached_grocers = file.path(data.root, "grocers_geocode_2020-11-09.csv")
+cached_grocers = here("data", "grocers_geocode_2020-11-09.csv")
 if(file.exists(cached_grocers) & use_repo_data){
   gctable <- read.csv(cached_grocers)
   failed = which(gctable$score == 0)
