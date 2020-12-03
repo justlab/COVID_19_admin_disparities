@@ -859,6 +859,7 @@ modzcta_to_tract2 <- dplyr::select(tract_modzcta_pop, -total_pop1)
 #' # Part 1: Creation of BWQS Neighborhood Infection Risk Scores
 #### Part 1: Creation of BWQS Neighborhood Infection Risk Scores ####
 
+#+ part1_step1
 # Step 1: Create univariate scatterplots with negative binomial linear smoothers
 # to make sure direction of associations are consistent for all variables
 # Visualize the non-linear relationship between infection rate and test_ratio (not adjusted for social inequity)
@@ -886,7 +887,7 @@ plotsocial %+% aes(x = essentialworker_pubtrans)
 SES_vars <- names(ZCTA_ACS_COVID %>% dplyr::select(one_over_medincome, not_insured, one_over_grocers_per_1000, unemployed, 
                                                     not_quarantined_jobs, essentialworker_pubtrans, essentialworker_drove, 
                                                     didnot_workhome_commute, res_vol_popdensity, avg_hhold_size))
-
+#+ part1_step2a
 # Step 2a: Examine relationships between explanatory variables to make sure nothing >0.9 correlation, as this could bias BWQS
 Cors_SESVars <- cor(x = ZCTA_ACS_COVID %>% dplyr::select(all_of(SES_vars)), method = "kendall")
 Cors_SESVars1 <- as.data.frame(Cors_SESVars)
@@ -905,6 +906,7 @@ if(export.figs) {
 }
 #' ![](`r file.path(fig.path, paste0("sfig1_", Sys.Date(), ".png"))`)
 
+#+ part1_step2b
 # Step 2b: Examine Univariable kendall associations for all selected variables with the outcome  
 bind_cols(Variables = SES_vars,
           
@@ -925,6 +927,7 @@ bind_cols(Variables = SES_vars,
          `p value` = as.character(ifelse(V1...3 < 0.0001, "< 0.0001", round(V1...3, 3))),) %>%
   dplyr::select(-V1...2, -V1...3) 
 
+#+ part1_step3
 # Step 3: Prepare data for BWQS and pass to stan for model fitting 
 pm(fit_BWQS_model <- function(data_list, stan_model_path){
   fitted_model <- stan(
@@ -986,6 +989,10 @@ m1 <- fit_BWQS_model(m1data$data_list, BWQS_stan_model)
 
 t_m1 = Sys.time()
 
+#' ## BWQS model diagnostics
+#### BWQS model diagnostics ####
+
+#+ m1_diagnostics
 # print m1 for model diagnostics (n_eff as % of 1750, Rhat, trace plots, acf)
 # m1
 min(summary(m1)$summary[,"n_eff"]/1750) # effective sample size is at worst 78%
@@ -1088,6 +1095,7 @@ if(export.figs) ggsave(fig2, filename = file.path(fig.path, paste0("fig2", "_", 
                        dpi = 300, width = 8, height = 8)
 #' ![](`r file.path(fig.path, paste0("fig2", "_", Sys.Date(),".png"))`)
 
+#+ part1_step4
 # Step 4: Construct the summative COVID-19 inequity index value for each ZCTA
 # Use the variable-specific weight on the quantiled splits to create a 10 point ZCTA-level infection risk score  
 BWQS_weights <- as.numeric(summary(m1)$summary[(length(vars)-length(SES_vars) + 1):number_of_coefficients,c(1)])
@@ -1203,6 +1211,7 @@ if(export.figs) {
 }
 #' ![](`r file.path(fig.path, paste0("sfig2_", Sys.Date(), ".png"))`)
 
+#+ part1_step5
 # Step 5: Visualize the spatial distribution of ZCTA-level infection risk scores 
 
 ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>%
@@ -1239,6 +1248,7 @@ fig3a <- ggplot() +
         axis.title.y = element_blank(),
         axis.title.x = element_blank())
 
+#+ part1_step6
 # Step 6: Compare quantile distribution of ZCTA-level BWQS scores by the race/ethnic composition of residents  
 Demographics <- ACS_Data_scaled %>% 
   dplyr::select(GEOID, ends_with("_raceethnic"), total_pop1) %>%
@@ -1402,6 +1412,7 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
   dplyr::select(zcta, pos_per_100000, testing_ratio) %>%
   left_join(SES_zcta_median, by = c("zcta" = "MODZCTA"))
 
+#+ run_m2, warning=FALSE
 # BWQS using median at the tract level 
 m2data_median <- prep_BWQS_data(SES_zcta_median_testing, SES_vars_median)
 m2_median <- fit_BWQS_model(data_list = m2data_median$data_list, stan_model_path = BWQS_stan_model)
@@ -1415,6 +1426,7 @@ SES_zcta_3q_testing <- ZCTA_ACS_COVID %>%
   dplyr::select(zcta, pos_per_100000, testing_ratio) %>%
   left_join(SES_zcta_3q, by = c("zcta" = "MODZCTA"))
 
+#+ run_m3, warning=FALSE
 #BWQS using the 3rd quartile at the tract level 
 m2data_3q <- prep_BWQS_data(SES_zcta_3q_testing, SES_vars_3q)
 m2_3q <- fit_BWQS_model(data_list = m2data_3q$data_list, stan_model_path = BWQS_stan_model)
@@ -1594,6 +1606,7 @@ if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_"
 #' # Part 3: Spatial analysis of mortality in relation to BWQS scores
 #### Part 3: Spatial analysis of mortality in relation to BWQS scores  ####
 
+#+ part3_step1
 # Step 1: Create dataframes with the relevant information 
 deaths_by23May2020_by_zcta1 <- deaths_by23May2020_by_zcta %>%
   left_join(., modzcta_to_zcta, by = c("MODIFIED_ZCTA" = "MODZCTA")) %>%
@@ -1642,6 +1655,7 @@ grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1),
 dev.off()
 #' ![](`r file.path(fig.path, paste0("fig3_combined_", Sys.Date(), ".png"))`)
 
+#+ part3_step2
 # Step 2: Run negative binomial model with spatial filtering  
 
 # Step 2a: Identify the neighbor relationships 
@@ -1702,6 +1716,7 @@ if(export.figs) ggsave(sfig10, filename = file.path(fig.path, paste0("sfig10", "
 #' # Sensitivity Analyses
 #### Sensitivity Analyses ####
 
+#+ sensitivity_start
 # half-Cauchy prior for overdispersion parameter
 BWQS_NB_halfcauchy_stan_model <- here("code", "nb_bwqs_halfcauchy.stan") 
 m1_halfcauchy <- fit_BWQS_model(m1data$data_list, BWQS_NB_halfcauchy_stan_model)
@@ -1773,6 +1788,7 @@ bind_rows(Compare_Metrics %>%
 #' # Subway analyses
 #### Subway analyses ####
 
+#+ subway_analyses
 # Different BWQS groupings for subway analysis (<.25, .25-.75, .75)
 
 UHF_BWQS_COVID_3split_shp <- UHF_shp %>% 
