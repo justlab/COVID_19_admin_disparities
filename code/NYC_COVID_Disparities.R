@@ -1961,16 +1961,17 @@ mobplot
 t_final = Sys.time()
 
 #' ## Runtimes
-print(t_start)
-print(t_turnstile_1)
-print(t_turnstile_2)
-print(t_census)
-print(t_dataprep)
-print(t_m1)
-print(t_postm1)
-print(t_m2)
-print(t_m3)
-print(t_final)
+#+ runtimes_all, results="hold", echo=FALSE
+print(paste(str_pad("t_start:",15,side = "right"),t_start))
+print(paste(str_pad("t_turnstile_1:",15,side = "right"),t_turnstile_1))
+print(paste(str_pad("t_turnstile_2:",15,side = "right"),t_turnstile_2))
+print(paste(str_pad("t_census:",15,side = "right"),t_census))
+print(paste(str_pad("t_dataprep:",15,side = "right"),t_dataprep))
+print(paste(str_pad("t_m1:",15,side = "right"),t_m1))
+print(paste(str_pad("t_postm1:",15,side = "right"),t_postm1))
+print(paste(str_pad("t_m2:",15,side = "right"),t_m2))
+print(paste(str_pad("t_m3:",15,side = "right"),t_m3))
+print(paste(str_pad("t_final:",15,side = "right"),t_final))
 
 # Total runtime:
 print(t_final - t_start)
@@ -1983,6 +1984,7 @@ print(t_turnstile_2 - t_turnstile_1)
 #' `r if(length(lf2)>0) {"This run used cached downloads of data. The time to run this section including downloads is around 5 minutes."}`
 print(t_census - t_turnstile_2)
 # Time part 4: All other data processing, modeling, and figure generation:
+#' `r if(any(c(t_m1 - t_dataprep, t_m2 - t_postm1, t_m3 - t_m2) < as.difftime(1, units = "mins"))) {"This run used cached model output for at least one of the three BWQS models. The time to run this section without any cached model output is around 35 minutes."}`
 print(t_final - t_census)
 
 #' ## Session Info
