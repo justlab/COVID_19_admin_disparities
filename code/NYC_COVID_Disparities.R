@@ -1447,6 +1447,9 @@ m2_check = sapply(m2_thinned_draws, function(pv) any(is.na(pv[m2_post_draws])) |
 # Do any post-warmup draws have NA or Inf values? 
 any(m2_check) 
 
+#+ m2_median_traceplots
+traceplot(m2_median, pars = c("beta1", "W"))
+
 #' Parameter estimates, credible intervals, and diagnostics from model using median tract values by MODZCTA
 #+ m2_median_table
 BWQS_params_m2 <- bind_cols(as_tibble(summary(m2_median)$summary[1:number_of_coefficients,c(1,4,6,8:10)]), label = vars)
@@ -1487,6 +1490,9 @@ range(m2_3q_post_draws)
 m2_3q_check = sapply(m2_3q_thinned_draws, function(pv) any(is.na(pv[m2_3q_post_draws])) | any(is.infinite(pv[m2_3q_post_draws])))
 # Do any post-warmup draws have NA or Inf values? 
 any(m2_3q_check) 
+
+#+ m2_3q_traceplots
+traceplot(m2_3q, pars = c("beta1", "W"))
 
 #' Parameter estimates, credible intervals, and diagnostics from model using third quartile tract values by MODZCTA
 #+ m2_3q_table
