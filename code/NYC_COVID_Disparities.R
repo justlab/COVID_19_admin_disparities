@@ -1076,6 +1076,7 @@ labels2 <- c("phi" = "Overdispersion",
              "delta3" = "Testing ratio: spline term 3",
              labels1)
 
+#' ### Supplemental Table 2
 # Supplemental Table 2: Parameter estimates, credible intervals, and diagnostics from main BWQS infections model
 BWQS_params %>% bind_cols(., "terms" = labels2) %>%
   dplyr::select(-label) %>%
@@ -1422,10 +1423,44 @@ SES_zcta_median_testing <- ZCTA_ACS_COVID %>%
   dplyr::select(zcta, pos_per_100000, testing_ratio) %>%
   left_join(SES_zcta_median, by = c("zcta" = "MODZCTA"))
 
+#' Warnings for undefined values in `log_lik[1:177]` and `y_new[1:177]` in the
+#' two models below using tract-level data have been hidden. There were
+#' undefined values during an early part of the warmup period, which
+#' print out a long list of errors, but these do not impact the
+#' posterior draws (as seen by trace plots and the potential scale-reduction
+#' R_hat statistics).
+
 #+ run_m2, warning=FALSE
 # BWQS using median at the tract level 
 m2data_median <- prep_BWQS_data(SES_zcta_median_testing, SES_vars_median)
 m2_median <- fit_BWQS_model(data_list = m2data_median$data_list, stan_model_path = BWQS_stan_model)
+
+#+ m2_check_NA
+# Check for NA or Inf values in the post-warmup draws
+m2_thinned_draws = m2_median@sim$samples[[1]]
+m2_args = m2_median@stan_args[[1]]
+m2_post_draws = (m2_args$warmup/m2_args$thin +1):(m2_args$iter/m2_args$thin)
+range(m2_post_draws)
+m2_check = sapply(m2_thinned_draws, function(pv) any(is.na(pv[m2_post_draws])) | any(is.infinite(pv[m2_post_draws])))
+# Do any post-warmup draws have NA or Inf values? 
+any(m2_check) 
+
+#' Parameter estimates, credible intervals, and diagnostics from model using median tract values by MODZCTA
+#+ m2_median_table
+BWQS_params_m2 <- bind_cols(as_tibble(summary(m2_median)$summary[1:number_of_coefficients,c(1,4,6,8:10)]), label = vars)
+BWQS_params_m2 %>% bind_cols(., "terms" = labels2) %>%
+  dplyr::select(-label) %>%
+  mutate_at(vars(1:6), ~round(., 3)) %>%
+  mutate_at(vars(5), ~round(., 0)) %>% 
+  mutate(`95% CrI`=paste0("(",format(`2.5%`, nsmall=3),", ",format(`97.5%`, nsmall=3),")")) %>% 
+  mutate(terms = 
+           case_when(terms=="BWQS term" ~ "COVID-19 inequity index",
+                     TRUE               ~ terms)) %>%
+  dplyr::select(-`2.5%`, -`97.5%`) %>%
+  rename(median=`50%`) %>%
+  dplyr::select(terms, mean, `95% CrI`, median, Rhat, n_eff) %>%
+  kbl(align=rep('r', 6), font_size = 9.5) %>%
+  kable_classic(full_width = F, html_font = "Arial")
 
 t_m2 = Sys.time()
 
@@ -1436,12 +1471,39 @@ SES_zcta_3q_testing <- ZCTA_ACS_COVID %>%
   dplyr::select(zcta, pos_per_100000, testing_ratio) %>%
   left_join(SES_zcta_3q, by = c("zcta" = "MODZCTA"))
 
-#+ run_m3, warning=FALSE
+#+ run_m2_3q, warning=FALSE
 #BWQS using the 3rd quartile at the tract level 
 m2data_3q <- prep_BWQS_data(SES_zcta_3q_testing, SES_vars_3q)
 m2_3q <- fit_BWQS_model(data_list = m2data_3q$data_list, stan_model_path = BWQS_stan_model)
 
-t_m3 = Sys.time() 
+#+ m2_3q_check_NA
+# Check for NA or Inf values in the post-warmup draws
+m2_3q_thinned_draws = m2_3q@sim$samples[[1]]
+m2_3q_args = m2_3q@stan_args[[1]]
+m2_3q_post_draws = (m2_3q_args$warmup/m2_3q_args$thin +1):(m2_3q_args$iter/m2_3q_args$thin)
+range(m2_3q_post_draws)
+m2_3q_check = sapply(m2_3q_thinned_draws, function(pv) any(is.na(pv[m2_3q_post_draws])) | any(is.infinite(pv[m2_3q_post_draws])))
+# Do any post-warmup draws have NA or Inf values? 
+any(m2_3q_check) 
+
+#' Parameter estimates, credible intervals, and diagnostics from model using third quartile tract values by MODZCTA
+#+ m2_3q_table
+BWQS_params_m2_3q <- bind_cols(as_tibble(summary(m2_3q)$summary[1:number_of_coefficients,c(1,4,6,8:10)]), label = vars)
+BWQS_params_m2_3q %>% bind_cols(., "terms" = labels2) %>%
+  dplyr::select(-label) %>%
+  mutate_at(vars(1:6), ~round(., 3)) %>%
+  mutate_at(vars(5), ~round(., 0)) %>% 
+  mutate(`95% CrI`=paste0("(",format(`2.5%`, nsmall=3),", ",format(`97.5%`, nsmall=3),")")) %>% 
+  mutate(terms = 
+           case_when(terms=="BWQS term" ~ "COVID-19 inequity index",
+                     TRUE               ~ terms)) %>%
+  dplyr::select(-`2.5%`, -`97.5%`) %>%
+  rename(median=`50%`) %>%
+  dplyr::select(terms, mean, `95% CrI`, median, Rhat, n_eff) %>%
+  kbl(align=rep('r', 6), font_size = 9.5) %>%
+  kable_classic(full_width = F, html_font = "Arial")
+
+t_m2_3q = Sys.time() 
 
 Summarize_BWQS_performance <- function(model, df){
          model_type = deparse(substitute(model))
@@ -1996,22 +2058,22 @@ print(paste(str_pad("t_dataprep:",15,side = "right"),t_dataprep))
 print(paste(str_pad("t_m1:",15,side = "right"),t_m1))
 print(paste(str_pad("t_postm1:",15,side = "right"),t_postm1))
 print(paste(str_pad("t_m2:",15,side = "right"),t_m2))
-print(paste(str_pad("t_m3:",15,side = "right"),t_m3))
+print(paste(str_pad("t_m2_3q:",15,side = "right"),t_m2_3q))
 print(paste(str_pad("t_final:",15,side = "right"),t_final))
 
 #+ runtime_by_section
 #' **Time part 1: Script start through loading of MTA Turnstile package:**
 print(t_turnstile_1 - t_start)
-#' **Time part 2: Downloading (if this is the first run) and processing of subway turnstile data by neighborhood:**
+#' **Time part 2: Downloading (if this is the first run) and processing of subway turnstile data by neighborhood:**  
 #' `r if(length(lf1)>0) {"This run used cached downloads of MTA turnstile data. The time to run this section including downloads is around 14 minutes."}`
 print(t_turnstile_2 - t_turnstile_1)
-#' **Time part 3: Downloading of all other data and processing of Census data:**
+#' **Time part 3: Downloading of all other data and processing of Census data:**  
 #' `r if(length(lf2)>0) {"This run used cached downloads of data. The time to run this section including downloads is around 5 minutes."}`
 print(t_census - t_turnstile_2)
-#' **Time part 4: All other data processing, modeling, and figure generation:**
-#' `r if(any(c(t_m1 - t_dataprep, t_m2 - t_postm1, t_m3 - t_m2) < as.difftime(1, units = "mins"))) {"This run used cached model output for at least one of the three BWQS models. The time to run this section without any cached model output is around 35 minutes."}`
+#' **Time part 4: All other data processing, modeling, and figure generation:**  
+#' `r if(any(c(t_m1 - t_dataprep, t_m2 - t_postm1, t_m2_3q - t_m2) < as.difftime(1, units = "mins"))) {"This run used cached model output for at least one of the three BWQS models. The time to run this section without any cached model output is around 35 minutes."}`
 print(t_final - t_census)
-#' **Total runtime:**
+#' **Total runtime:**  
 print(t_final - t_start)
 
 #' ## Session Info
