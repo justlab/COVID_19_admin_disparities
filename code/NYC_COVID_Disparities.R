@@ -11,7 +11,7 @@
 
 t_start = Sys.time()
 
-#+ message=FALSE
+#+ load_packages, message=FALSE
 # CRAN packages:
 library(tidyverse)
 library(sf)
@@ -49,6 +49,7 @@ library(lwgeom)
 library(Just.universal) 
 
 #' # Session Configuration
+#+ session_config 
 #### SESSION CONFIGURATION ####
 options(dplyr.summarise.inform=FALSE)
 
@@ -152,15 +153,18 @@ download = function(url, to, f, ...){
 #' # Load Data
 #### Load Data ####
 
+#+ cached_data_check
 # Check if subway turnstile data is already downloaded
 lf1 = list.files(file.path(Sys.getenv("MTA_TURNSTILE_DATA_DIR"), "downloads/mta_turnstile/"), pattern = ".txt")
 # Check if other data is already downloaded
 lf2 = list.files(file.path(data.root, "downloads"), pattern = "ny_xwalk.csv.gz")
 
+#+ subway_nhood
 # Subway ridership data
 Subway_ridership_by_UHF <- relative.subway.usage(2020L, "nhood")
 t_turnstile_2 = Sys.time()
 
+#+ load_pluto
 # get the Pluto dataset from #https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page 
 pm(fst = T,
 get.Pluto <- function() download(
@@ -177,6 +181,7 @@ Pluto <- as.data.frame(get.Pluto())
 # In that case, delete the pluto.zip file and try again:
 #unlink(file.path(data.root, "downloads", "pluto.zip"))
 
+#+ load_building_footprints
 if (file.exists(file.path(data.root, "Bldg_Footprints.qs"))) {
     Bldg_Footprints <- qread(file.path(data.root, "Bldg_Footprints.qs"))
 } else {
@@ -189,6 +194,7 @@ if (file.exists(file.path(data.root, "Bldg_Footprints.qs"))) {
   qsave(Bldg_Footprints, file.path(data.root, "Bldg_Footprints.qs"))
 }
 
+#+ load_rest_of_data
 ZCTA_by_boro <- download(
     "https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm",
     "uhf_neighborhoods.html",
@@ -543,7 +549,7 @@ acs.essential <- function(admin_unit, zcta_pop = NULL, state_unit = NULL) {
    return(ACS_Essential_worker_estimates)
 }
 
-
+#+ load_census_zcta
 # ZCTA CENSUS DATA
 options(tigris_use_cache = TRUE)
 ACS_Data1 <- as.data.frame(acs.main("zcta", NULL, FALSE)) #download the zcta data
@@ -553,6 +559,7 @@ ACS_EssentialWrkr_Commute1 = as.data.frame(acs.essential("zcta", zcta_pop = ACS_
 
 print(paste("The 2018 5-year ACS population range in NYC MODZCTAs is:", paste(range(ACS_Data2$total_pop1), collapse = "-")))
 
+#+ load_census_tract
 # TRACT CENSUS DATA  
 acs_tracts <- acs.main("tract", "NY", TRUE)
 acs_tracts2 <- clean_acs_data_and_derive_vars(acs_tracts, "tract")
@@ -563,6 +570,7 @@ t_census = Sys.time()
 #' # Grocery stores per area
 #### Grocery stores per area ####
 
+#+ load_grocers
 non_supermarket_strings <- c("DELI|TOBACCO|GAS|CANDY|7 ELEVEN|7-ELEVEN|LIQUOR|ALCOHOL|BAKERY|CHOCOLATE|DUANE READE|WALGREENS|CVS|RITE AID|RAVIOLI|WINERY|WINE|BEER|CAFE|COFFEE")
 
 food_retail_filtered <- food_retail %>% 
@@ -630,16 +638,16 @@ zcta_grocers <- suppressWarnings(st_intersection(zctaSF, grocerSF)) %>%
 # range(zcta_grocers$grocers) # 1, 21
 
 #' # Subway station locations
+#+ subway_locs
 #### Subway station locations ####
-
 SubwayStation_shp <- as_tibble(turnstile()$stations) %>%
   st_as_sf(., coords = c("lon", "lat"), crs = 4269) %>%
   st_transform(., crs = 2263) %>%
   filter(!str_detect(ca, "PTH")) #removing New Jersey PATH stations
 
 #' # Residential area
+#+ Residential area
 #### Residential area ####
-
 Pluto_ResOnly <- Pluto %>%
   filter(landuse>="01" & landuse<="04") %>%
   mutate(base_bbl = as.character(bbl)) %>%
@@ -681,6 +689,7 @@ res_bldg_tract_sum <- st_set_geometry(res_bldg_tract, NULL) %>%
 
 
 #' # COVID Tests
+#+ covid_tests
 #### COVID Tests ####
 
 MODZCTA_NYC_shp1 <- MODZCTA_NYC_shp %>%
@@ -796,6 +805,7 @@ tract_vars <- tractSF %>% # uses local CRS
   mutate_at(vars(starts_with("essentialworker_")), ~round((./over16total_industry1)*100, 2))
 
 #' # Tract to ZCTA weighted assignment
+#+ tract_to_zcta
 #### Tract to ZCTA weighted assignment ####
 # Shares of residential addresses in ZCTAs by Tract are later used to select
 # representative tract-level SES values at a specified location on the ECDF
@@ -990,9 +1000,9 @@ m1 <- fit_BWQS_model(m1data$data_list, BWQS_stan_model)
 t_m1 = Sys.time()
 
 #' ## BWQS model diagnostics
+#+ m1_diagnostics
 #### BWQS model diagnostics ####
 
-#+ m1_diagnostics
 # print m1 for model diagnostics (n_eff as % of 1750, Rhat, trace plots, acf)
 # m1
 min(summary(m1)$summary[,"n_eff"]/1750) # effective sample size is at worst 78%
@@ -1968,7 +1978,7 @@ if(export.figs) ggsave(sfig8 , filename = file.path(fig.path, paste0("sfig8", "_
 #' ![](`r file.path(fig.path, paste0("sfig8", "_", Sys.Date(),".png"))`)
 
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
-#+ message=FALSE
+#+ mta_vs_google, message=FALSE
 source(here("code/mta_vs_google.R"), echo = FALSE)
 mobplot
 
@@ -1989,19 +1999,20 @@ print(paste(str_pad("t_m2:",15,side = "right"),t_m2))
 print(paste(str_pad("t_m3:",15,side = "right"),t_m3))
 print(paste(str_pad("t_final:",15,side = "right"),t_final))
 
-# Total runtime:
-print(t_final - t_start)
-# Time part 1: Script start through loading of MTA Turnstile package:
+#+ runtime_by_section
+#' **Time part 1: Script start through loading of MTA Turnstile package:**
 print(t_turnstile_1 - t_start)
-# Time part 2: Downloading (if this is the first run) and processing of subway turnstile data by neighborhood:
+#' **Time part 2: Downloading (if this is the first run) and processing of subway turnstile data by neighborhood:**
 #' `r if(length(lf1)>0) {"This run used cached downloads of MTA turnstile data. The time to run this section including downloads is around 14 minutes."}`
 print(t_turnstile_2 - t_turnstile_1)
-# Time part 3: Downloading of all other data and processing of Census data:
+#' **Time part 3: Downloading of all other data and processing of Census data:**
 #' `r if(length(lf2)>0) {"This run used cached downloads of data. The time to run this section including downloads is around 5 minutes."}`
 print(t_census - t_turnstile_2)
-# Time part 4: All other data processing, modeling, and figure generation:
+#' **Time part 4: All other data processing, modeling, and figure generation:**
 #' `r if(any(c(t_m1 - t_dataprep, t_m2 - t_postm1, t_m3 - t_m2) < as.difftime(1, units = "mins"))) {"This run used cached model output for at least one of the three BWQS models. The time to run this section without any cached model output is around 35 minutes."}`
 print(t_final - t_census)
+#' **Total runtime:**
+print(t_final - t_start)
 
 #' ## Session Info
 #+ sessioninfo, R.options = list(width = 100)
