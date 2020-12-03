@@ -152,7 +152,11 @@ download = function(url, to, f, ...){
 #' # Load Data
 #### Load Data ####
 
-#' Progress bars are a single line when run interactively, but print every refresh with knitr 
+# Check if subway turnstile data is already downloaded
+lf1 = list.files(file.path(Sys.getenv("MTA_TURNSTILE_DATA_DIR"), "downloads/mta_turnstile/"), pattern = ".txt")
+# Check if other data is already downloaded
+lf2 = list.files(file.path(data.root, "downloads"), pattern = "ny_xwalk.csv.gz")
+
 # Subway ridership data
 Subway_ridership_by_UHF <- relative.subway.usage(2020L, "nhood")
 t_turnstile_2 = Sys.time()
@@ -1973,8 +1977,10 @@ print(t_final - t_start)
 # Time part 1: Script start through loading of MTA Turnstile package:
 print(t_turnstile_1 - t_start)
 # Time part 2: Downloading (if this is the first run) and processing of subway turnstile data by neighborhood:
+#' `r if(length(lf1)>0) {"This run used cached downloads of MTA turnstile data. The time to run this section including downloads is around 14 minutes."}`
 print(t_turnstile_2 - t_turnstile_1)
 # Time part 3: Downloading of all other data and processing of Census data:
+#' `r if(length(lf2)>0) {"This run used cached downloads of data. The time to run this section including downloads is around 5 minutes."}`
 print(t_census - t_turnstile_2)
 # Time part 4: All other data processing, modeling, and figure generation:
 print(t_final - t_census)
