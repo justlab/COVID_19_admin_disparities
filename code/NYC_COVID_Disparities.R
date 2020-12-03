@@ -5,6 +5,8 @@
 #'   html_document:
 #'     toc: true
 #'     toc_depth: 2
+#'     toc_float: 
+#'       collapsed: false
 #' ---
 #/* This script contains inline R Markdown for added legibility when using knitr::spin 
 # or compiling a report in R Studio. R Markdown lines begin with #', #+, or #/* */
