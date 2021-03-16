@@ -82,7 +82,8 @@ fig.path = here("figures")
 if(!dir.exists(fig.path)) dir.create(fig.path)
 
 export.figs = TRUE 
-if(export.figs) message("Saving figures to:\n ", fig.path) else message("Not saving figures")
+vector.figs = FALSE
+if(export.figs) message(paste0("Saving ", ifelse(vector.figs, "EPS", "PNG") ," figures to:\n "), fig.path) else message("Not saving figures")
 
 # To generate census data, you need an API key, which you can request here: https://api.census.gov/data/key_signup.html
 #census_api_key("INSERT YOUR CENSUS API KEY HERE", install = TRUE) 
@@ -911,7 +912,11 @@ Cors_SESVars2 %>% arrange(desc(correlation)) %>% distinct(correlation, .keep_all
 
 
 if(export.figs) {
-  png(filename = file.path(fig.path, paste0("sfig1_", Sys.Date(), ".png")), width = 96*7, height = 96*7)
+  if(vector.figs){
+    setEPS()
+    postscript(file.path(fig.path,paste0("sfig1_", Sys.Date(), ".eps")), pointsize = 9)
+  } else {png(filename = file.path(fig.path, paste0("sfig1_", Sys.Date(), ".png")), width = 96*7, height = 96*7)}
+  
   corrplot(Cors_SESVars, p.mat = Cors_SESVars, insig = "p-value", type = "lower", 
          sig.level = -1, tl.col = "black", tl.srt = 45)
   dev.off()
@@ -1035,7 +1040,10 @@ sfig3_qq <- ggplot(data.frame(x = residuals_qq_unif$x, y = residuals_qq_unif$y))
   coord_equal(ratio = 1) +
   labs(x = "Expected", y = "Observed") +
   theme_bw() + theme(plot.margin = unit(c(5.5, 11, 5.5, 5.5), "points"))
-if(export.figs) ggsave(filename = file.path(fig.path, paste0("sfig3_", Sys.Date(), ".png")), width = 3.5, height = 3.4)
+if(export.figs){
+  sfig3_path = file.path(fig.path, paste0("sfig3_", Sys.Date(), ifelse(vector.figs, ".eps", ".png")))
+  ggsave(filename = sfig3_path, width = 3.5, height = 3.4)
+} 
 #' ![](`r file.path(fig.path, paste0("sfig3_", Sys.Date(), ".png"))`)
 
 # examine parameter estimates
@@ -1104,8 +1112,10 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
   theme_set(theme_bw(base_size = 18)) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
-if(export.figs) ggsave(fig2, filename = file.path(fig.path, paste0("fig2", "_", Sys.Date(),".png")), 
-                       dpi = 300, width = 8, height = 8)
+if(export.figs){ 
+  fig2_path = file.path(fig.path, paste0("fig2_", Sys.Date(), ifelse(vector.figs, ".eps", ".png")))
+  ggsave(fig2, filename = fig2_path, dpi = 300, width = 8, height = 8)
+}  
 #' ![](`r file.path(fig.path, paste0("fig2", "_", Sys.Date(),".png"))`)
 
 #+ part1_step4
@@ -1201,9 +1211,18 @@ BWQS_scatter <- ggplot(sim_bwqs_df, aes(x = bwqs_seq)) +
 BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", fill = "grey40", margins = "both", 
                                     xparams = list(binwidth = 0.5), yparams = list(binwidth = 200))
 if(export.figs) {
-  png(filename = file.path(fig.path, paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
-  print(BWQS_scatter)
-  dev.off()
+  if(vector.figs){
+    # SVG is the only vector format R can use transparency in; output to SVG then convert to PDF for Nature Communications
+    fig1_path = file.path(fig.path, paste0("fig1_", Sys.Date()))
+    svg(paste0(fig1_path, ".svg"), pointsize = 9)
+    print(BWQS_scatter)
+    dev.off()
+    system(paste0("rsvg-convert -f pdf -o ", fig1_path, ".pdf", " ", fig1_path, ".svg"))
+  } else {
+    png(filename = file.path(fig.path, paste0("fig1_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
+    print(BWQS_scatter)
+    dev.off()
+  }
 }
 #' ![](`r file.path(fig.path, paste0("fig1_", Sys.Date(), ".png"))`)
 
@@ -1218,9 +1237,18 @@ testing_scatter <- ggplot(sim_testing_df, aes(x = x)) +
 testing_scatter <- ggExtra::ggMarginal(testing_scatter, type = "histogram", fill = "grey40", margins = "both",
                                        xparams = list(binwidth = 0.005), yparams = list(binwidth = 200))
 if(export.figs) {
-  png(filename = file.path(fig.path, paste0("sfig2_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
-  print(testing_scatter)
-  dev.off()
+  if(vector.figs){
+    sfig2_path = file.path(fig.path, paste0("sfig2_", Sys.Date()))
+    svg(paste0(sfig2_path, ".svg"), pointsize = 9)
+    print(testing_scatter)
+    dev.off()
+    system(paste0("rsvg-convert -f pdf -o ", sfig2_path, ".pdf", " ", sfig2_path, ".svg"))
+    unlink(paste0(sfig2_path, ".svg"))
+  } else {
+    png(filename = file.path(fig.path, paste0("sfig2_", Sys.Date(), ".png")), width = 96*5, height = 96*5)
+    print(testing_scatter)
+    dev.off()
+  }
 }
 #' ![](`r file.path(fig.path, paste0("sfig2_", Sys.Date(), ".png"))`)
 
@@ -1304,8 +1332,10 @@ fig4 <- ggplot(Demographics_for_ridges,
   scale_y_discrete(expand = c(0, 0)) + 
   expand_limits(y = 6) + 
   theme(legend.position = "none")
-if(export.figs) ggsave(plot = fig4, filename = file.path(fig.path, paste0("fig4","_",Sys.Date(),".png")), 
-                       dpi = 300, device = "png", width = 8, height = 5)
+if(export.figs){
+  fig4_path = file.path(fig.path, paste0("fig4_", Sys.Date(), ifelse(vector.figs, ".eps", ".png")))
+  ggsave(plot = fig4, filename = fig4_path, dpi = 300, width = 8, height = 5)
+} 
 #' ![](`r file.path(fig.path, paste0("fig4","_",Sys.Date(),".png"))`)
 
 Below_25th_zctas <- ZCTA_BQWS %>%
@@ -1378,8 +1408,10 @@ sfig4 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
         axis.text.y = element_text(size = 16),
         axis.text.x = element_text(size = 16, color = "black"), 
         axis.title.x = element_blank()) 
-if(export.figs) ggsave(sfig4, filename = file.path(fig.path, paste0("sfig4","_",Sys.Date(),".png")), device = "png",
-                       dpi = 300, width = 12, height = 6)
+if(export.figs){
+  sfig4_path = file.path(fig.path, paste0("sfig4_", Sys.Date(), ifelse(vector.figs, ".eps", ".png")))
+  ggsave(sfig4, filename = sfig4_path, dpi = 300, width = 12, height = 6)
+} 
 #' ![](`r file.path(fig.path, paste0("sfig4","_",Sys.Date(),".png"))`)
 
 t_postm1 = Sys.time()
@@ -1586,8 +1618,14 @@ sfig6 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridersh
   theme_bw(base_size = 16) +
   xlab("Date") +
   scale_y_continuous("Relative Subway Ridership (%)", labels = scales::percent)
-if(export.figs) ggsave(sfig6, filename = file.path(fig.path, paste0("sfig6", "_", Sys.Date(), ".png")), 
-                       device = "png", dpi = 300, width = 8, height = 5)
+if(export.figs){
+  sfig6_path = file.path(fig.path, paste0("sfig6_", Sys.Date(), ifelse(vector.figs, ".svg", ".png")))
+  ggsave(sfig6, filename = sfig6_path, dpi = 300, width = 8, height = 5)
+  if(vector.figs){
+    system(paste0("rsvg-convert -f pdf -o ", str_sub(sfig6_path,1,-5), ".pdf", " ", sfig6_path))
+    unlink(sfig6_path)
+  }
+} 
 #' ![](`r file.path(fig.path, paste0("sfig6", "_", Sys.Date(), ".png"))`)
 
 # create a dataframe for the analysis 
@@ -1651,8 +1689,14 @@ fig5 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-if(export.figs) ggsave(fig5, filename = file.path(fig.path, paste0("fig5", "_", Sys.Date() ,".png")), 
-                       dpi = 300, width = 8, height = 6)
+if(export.figs){
+  fig5_path = file.path(fig.path, paste0("fig5_", Sys.Date(), ifelse(vector.figs, ".svg", ".png")))
+  ggsave(fig5, filename = fig5_path, dpi = 300, width = 8, height = 6)
+  if(vector.figs){
+    system(paste0("rsvg-convert -f pdf -o ", str_sub(fig5_path,1,-5), ".pdf", " ", fig5_path))
+    unlink(fig5_path)
+  }
+} 
 #' ![](`r file.path(fig.path, paste0("fig5", "_", Sys.Date() ,".png"))`)
 
 # which UHF neighborhoods were dropped?
@@ -1678,8 +1722,10 @@ sfig5 <- ggplot() +
   theme_smallmaps + 
   theme(legend.position = c(0.22, 0.86), plot.margin = margin(0, 0, 0, 0, "pt"))
 #+ warning=FALSE
-if(export.figs) ggsave(sfig5, filename = file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png")), 
-                       dpi = 300, width = 4, height = 4)
+if(export.figs){
+  sfig5_path = file.path(fig.path, paste0("sfig5_", Sys.Date(), ifelse(vector.figs, ".eps", ".png")))
+  ggsave(sfig5, filename = sfig5_path, dpi = 300, width = 4, height = 4)
+}
 #' ![](`r file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png"))`)  
 
 #' 
@@ -1727,12 +1773,23 @@ fig3b_2 = fig3b + labs(tag = "b") + theme(plot.tag.position = c(-0.028, 0.93), p
 fig3c_2 = fig3c + labs(tag = "c") + theme(plot.tag.position = c(-0.028, 0.93), plot.tag = element_text(face = "bold", size = 15))
 
 plotres = 300
-agg_png(filename = file.path(fig.path, paste0("fig3_combined_", Sys.Date(), ".png")), 
-        width = plotres*4.25, height = plotres*6, scaling = 2)
-grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1), 
-             arrangeGrob(fig3b_2, fig3c_2, ncol = 2, nrow = 1),
-             nrow = 2, ncol = 1, heights = c(1.9,1))
-dev.off()
+if(export.figs) {
+  if(vector.figs){
+    fig3_path = file.path(fig.path, paste0("fig3_combined_", Sys.Date(), ".svg"))
+    svg(filename = fig3_path, width = 1.9*4.25, height = 1.9*6)
+  } else {
+    agg_png(filename = file.path(fig.path, paste0("fig3_combined_", Sys.Date(), ".png")), 
+            width = plotres*4.25, height = plotres*6, scaling = 2)
+  }
+  grid.arrange(arrangeGrob(fig3a_2, ncol = 1, nrow = 1), 
+               arrangeGrob(fig3b_2, fig3c_2, ncol = 2, nrow = 1),
+               nrow = 2, ncol = 1, heights = c(1.9,1))
+  dev.off()
+  if(vector.figs){
+    system(paste0("rsvg-convert -f pdf -o ", str_sub(fig3_path,1,-5), ".pdf", " ", fig3_path))
+    unlink(fig3_path)
+  } 
+}
 #' ![](`r file.path(fig.path, paste0("fig3_combined_", Sys.Date(), ".png"))`)
 
 #+ part3_step2
@@ -1788,8 +1845,10 @@ sfig10 <- ggplot() +
         legend.text = element_text(size = 8.5),
         plot.margin = unit(c(0.1,0.1,0.1,0.1), "in")
         )
-if(export.figs) ggsave(sfig10, filename = file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png")), 
-                       dpi = 300, width = 5, height = 3.2)
+if(export.figs){
+  sfig10_path = file.path(fig.path, paste0("sfig10_", Sys.Date(), ifelse(vector.figs, ".eps", ".png")))
+  ggsave(sfig10, filename = sfig10_path, dpi = 300, width = 5, height = 3.2)
+} 
 #' ![](`r file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png"))`)
 
 #' 
@@ -1957,8 +2016,14 @@ sfig7 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-if(export.figs) ggsave(sfig7 , filename = file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png")), 
-                       dpi = 300, width = 8, height = 6)
+if(export.figs){ 
+  sfig7_path = file.path(fig.path, paste0("sfig7_", Sys.Date(), ifelse(vector.figs, ".svg", ".png")))
+  ggsave(sfig7 , filename = sfig7_path, dpi = 300, width = 8, height = 6)
+  if(vector.figs){
+    system(paste0("rsvg-convert -f pdf -o ", str_sub(sfig7_path,1,-5), ".pdf", " ", sfig7_path))
+    unlink(sfig7_path)
+  }
+}
 #' ![](`r file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png"))`)
 
 # ZCTA level BWQS for subway 
@@ -2043,8 +2108,14 @@ sfig8 <- ggplot() +
   theme_bw(base_size = 16) +
   labs(colour="COVID-19 inequity index") +
   theme(legend.title = element_text(face = "bold", size = 12), legend.position = c(0.8, 0.7))  
-if(export.figs) ggsave(sfig8 , filename = file.path(fig.path, paste0("sfig8", "_", Sys.Date(),".png")), 
-                       dpi = 300, width = 8, height = 6)
+if(export.figs){ 
+  sfig8_path = file.path(fig.path, paste0("sfig8_", Sys.Date(), ifelse(vector.figs, ".svg", ".png")))
+  ggsave(sfig8 , filename = sfig8_path, dpi = 300, width = 8, height = 6)
+  if(vector.figs){
+    system(paste0("rsvg-convert -f pdf -o ", str_sub(sfig8_path,1,-5), ".pdf", " ", sfig8_path))
+    unlink(sfig8_path)
+  }
+}
 #' ![](`r file.path(fig.path, paste0("sfig8", "_", Sys.Date(),".png"))`)
 
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
