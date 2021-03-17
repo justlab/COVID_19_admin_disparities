@@ -4,6 +4,7 @@ message("Running comparison of MTA turnstile data with Google mobility reports..
 
 # Packages ####
 library(Just.universal)
+library(RSQLite)
 library(data.table)
 library(fst)
 library(ggplot2)
@@ -85,10 +86,23 @@ mobplot <- ggplot(comp_long[!is.na(relative_use)],
   theme(legend.title = element_text(face = "bold", size = 8), legend.position = c(0.68, 0.75),
         legend.spacing = unit(1, "points"), legend.box="horizontal") 
 
-plotres = 300
-fig_outpath = file.path(fig.path, paste0("sfig9_mobility_", Sys.Date(),".png"))
-message("Writing ", fig_outpath)
-agg_png(filename = fig_outpath, 
-        width = plotres*6, height = plotres*4, scaling = 3.3)
-print(mobplot)
-dev.off()
+if(export.figs) {
+  if(vector.figs){
+    fig_outpath = file.path(fig.path, paste0("sfig9_mobility_", Sys.Date(),".svg"))
+    svg(filename = fig_outpath, width = 1.3*6, height = 1.3*4.25)
+  } else {
+    plotres = 300
+    fig_outpath = file.path(fig.path, paste0("sfig9_mobility_", Sys.Date(),".png"))
+    message("Writing ", fig_outpath)
+    agg_png(filename = fig_outpath, 
+            width = plotres*6, height = plotres*4, scaling = 3.3)
+  }
+  print(mobplot)
+  dev.off()
+  if(vector.figs){
+    pdf_outpath = paste0(str_sub(fig_outpath,1,-5), ".pdf")
+    message("Writing ", pdf_outpath)
+    system(paste0("rsvg-convert -f pdf -o ", pdf_outpath, " ", fig_outpath))
+    unlink(fig_outpath)
+  } 
+}
