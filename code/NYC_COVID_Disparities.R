@@ -387,6 +387,7 @@ pm(acs.main <- function(admin_unit = c("zcta", "tract"), state_unit = c(NULL, "N
      
      if(admin_unit=="zcta"){
        ACS_Data <- ACS_Data %>% #only pull out the estimates and cleaning variable names
+         mutate(GEOID = str_sub(GEOID, -5, -1)) %>%
          filter(GEOID %in% ZCTAs_in_NYC) %>%
          dplyr::select(-NAME)  %>%
          dplyr::select(GEOID, !ends_with("M")) %>%
@@ -518,6 +519,7 @@ acs.essential <- function(admin_unit, zcta_pop = NULL, state_unit = NULL) {
      
      ACS_Essential_worker_estimates <- ACS_EssentialWrkr_Commute %>% #clean data and aggregate 
        dplyr::select(-ends_with("M"), -NAME) %>%
+       mutate(GEOID = str_sub(GEOID, -5, -1)) %>%
        filter(GEOID %in% ZCTAs_in_NYC) %>%
        # scale ZCTAs by proportion of population in NYC
        right_join(zcta_pop %>% dplyr::select("GEOID", "in_NYC_prop"), by = "GEOID") %>% 
@@ -753,6 +755,11 @@ fig3b <- MODZCTA_NYC_shp1 %>%
   theme_bw(base_size = 6) + 
   theme_smallmaps
 
+write_csv(st_drop_geometry(MODZCTA_NYC_shp1 %>%
+                             left_join(., May7_tests, by = "zcta") %>%
+                             left_join(., ACS_Data2, by = "zcta") %>%
+                             filter(zcta != "99999") %>%
+                             mutate(pos_per_100000 = (Positive/total_pop1)*100000)) %>% dplyr::select(zcta, pos_per_100000), here("figures", "source_files", "fig3b.csv"))
 
 #' # Create data frames of all above information
 #### Create data frames of all above information ####
@@ -1037,7 +1044,8 @@ sfig3_qq <- ggplot(data.frame(x = residuals_qq_unif$x, y = residuals_qq_unif$y))
   theme_bw() + theme(plot.margin = unit(c(5.5, 11, 5.5, 5.5), "points"))
 if(export.figs) ggsave(filename = file.path(fig.path, paste0("sfig3_", Sys.Date(), ".png")), width = 3.5, height = 3.4)
 #' ![](`r file.path(fig.path, paste0("sfig3_", Sys.Date(), ".png"))`)
-
+if((!dir.exists(here("figures", "source_files")))) dir.create(here("figures", "source_files"))
+write_csv(as_tibble(residuals_qq_unif), path = here("figures", "source_files", "sfig3.csv"))
 # examine parameter estimates
 exp(mean(extract(m1, "beta1")$beta1))
 vars = c("phi", "beta0", "beta1", paste0("delta", 1:3), SES_vars)
@@ -1094,6 +1102,7 @@ BWQS_params %>% bind_cols(., "terms" = labels2) %>%
   kbl(align=rep('r', 6), font_size = 9.5) %>%
   kable_classic(full_width = F, html_font = "Arial")
 
+write_csv(BWQS_fits, here("figures", "source_files", "fig2.csv"))
 # create a figure with parameter estimates for the weights
 fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, ymax=upper)) +
   geom_pointrange() + 
@@ -1192,6 +1201,9 @@ sim_testing_df <- data.frame(x = inequity_seq$x,
 rm(sim_out, xseqlength, inequity_seq, sim_matrix)
 
 # Visualize the relationship between BWQS index and infection rate at the median testing_ratio
+write_csv(sim_bwqs_df, here("figures", "source_files", "fig1_a.csv"))
+write_csv(bind_cols(BWQS_index, y = m1data$data_list$y), here("figures", "source_files", "fig1_b.csv"))
+
 BWQS_scatter <- ggplot(sim_bwqs_df, aes(x = bwqs_seq)) + 
   geom_ribbon(aes(ymin = lower, ymax = upper), fill = 'grey75') + 
   geom_line(aes(y = mean)) + 
@@ -1208,6 +1220,7 @@ if(export.figs) {
 #' ![](`r file.path(fig.path, paste0("fig1_", Sys.Date(), ".png"))`)
 
 # Visualize the relationship between testing_ratio and infection rate at the median BWQS
+write_csv(sim_testing_df, here("figures", "source_files", "sfig2.csv"))
 testing_scatter <- ggplot(sim_testing_df, aes(x = x)) + 
   geom_ribbon(aes(ymin = lower, ymax = upper), fill = 'grey75') + 
   geom_line(aes(y = mean)) + 
@@ -1234,6 +1247,7 @@ ZCTA_BWQS_COVID_shp <- ZCTA_ACS_COVID_shp %>%
 
 ZCTA_BWQS_COVID_shp <- st_transform(ZCTA_BWQS_COVID_shp, 4326)
 
+write_csv(st_drop_geometry(ZCTA_BWQS_COVID_shp %>% dplyr::select(zcta, BWQS_index)), here("figures", "source_files", "fig3a.csv"))
 # Figure 3A - BWQS Index by ZCTA
 fig3a <- ggplot() + 
   geom_sf(data = basemap_water, fill = "white", lwd = 0) + 
@@ -1292,7 +1306,7 @@ Demographics_for_ridges <- Demographics %>%
   summarise(weighted.mean(BWQS_index, Population),
             weightedMedian(BWQS_index, Population)))
 
-
+write_csv(Demographics_for_ridges, here("figures", "source_files", "fig4.csv"))
 fig4 <- ggplot(Demographics_for_ridges,
        aes(x = BWQS_index, y = `Race/Ethnicity`)) + 
   xlab("COVID-19 inequity index")+
@@ -1361,6 +1375,7 @@ labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percen
 labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percentile BWQS" = "Below 25th\n%ile index", 
                          "Between 25-75th percentile BWQS" = "Between 25-75th\n%ile index", "Above 75th percentile BWQS" = "Above 75th\n%ile index")
 
+write_csv(Demographics_by_BWQS, here("figures", "source_files", "sfig4.csv"))
 sfig4 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x=Group)) + 
     geom_rect(data = subset(Demographics_by_BWQS, Group=="NYC Population"), 
             aes(xmin=as.numeric(Group)-.35,xmax=as.numeric(Group)+.35, ymin=0, ymax=100, fill="gray85"), color = "gray", alpha = .1) +
@@ -1580,6 +1595,7 @@ DRM_mean_predictions <- bind_cols(Mean_Ridership,
                                   as_tibble(withCallingHandlers(predict(fit_drm_w2.4, interval = "confidence"), warning = handler ))) 
 
 # Supplementary Figure 6
+write_csv(DRM_mean_predictions %>% dplyr::select(date, usage.median.ratio, Lower, Upper, Prediction), here("figures", "source_files", "sfig6.csv"))
 sfig6 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridership$date, y = Mean_Ridership$usage.median.ratio)) + 
   geom_ribbon(data = DRM_mean_predictions, aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50", alpha = .5) +
   geom_line(aes(x = DRM_mean_predictions$date, y = DRM_mean_predictions$Prediction), color = "red") + 
@@ -1640,6 +1656,7 @@ Subway_BWQS_df2 <- Subway_BWQS_df1 %>%
   filter(date>"2020-02-16") %>% # subsetting for visualization
   mutate(Risk = if_else(Risk == "High", "High (above median)", "Low (below median)"))
 
+write_csv(Subway_BWQS_df2 %>% dplyr::select(date, usage.median.ratio, Risk, Lower, Upper, Prediction), here("figures", "source_files", "fig5.csv"))
 fig5 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_df2, aes(x = date, y = usage.median.ratio, color = Risk), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
   geom_ribbon(data = subset(Subway_BWQS_df2, Risk == "High (above median)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
@@ -1662,6 +1679,9 @@ notincluded_uhf_shp <- UHF_BWQS_COVID_shp %>%
            UHFCODE !=0) %>%
   mutate(NotIncluded = "*")
 
+write_csv(UHF_BWQS_COVID_shp, here("figures", "source_files", "sfig5_a.csv"))
+write_csv(SubwayStation_shp, here("figures", "source_files", "sfig5_b.csv"))
+write_csv(notincluded_uhf_shp, here("figures", "source_files", "sfig5_c.csv"))
 # Supplementary Figure 5
 sfig5 <- ggplot() + 
   geom_sf(data = basemap_water, fill = "white", lwd = 0) + 
@@ -1701,6 +1721,7 @@ ZCTA_BWQS_COVID_shp1 <- ZCTA_ACS_COVID_shp %>%
   mutate(prop_65plus = age65_plus/total_pop1,
          zcta = as.numeric(zcta)) 
 
+write_csv(st_drop_geometry(ZCTA_BWQS_COVID_shp1 %>% dplyr::select(zcta, COVID_DEATH_RATE)), here("figures", "source_files", "fig3c.csv"))
 # Figure 3C - Mortality
 fig3c <- ZCTA_BWQS_COVID_shp1 %>% 
   ggplot() +
@@ -1769,6 +1790,8 @@ spdat.sens$nb_residuals <- clean.nb.sens$residuals
 spplot(spdat.sens, "nb_residuals", at=quantile(spdat.sens$nb_residuals, p=seq(0,1,length.out = 10)))
 pal_sfig10 <- brewer_pal(type = "div", palette = "RdYlBu")(5)[2:5] 
 pal_sfig10[[2]] <- "#fafadf" # make yellow less saturated
+
+write_csv(bind_cols(zcta = spdat.sens[["zcta"]], nb_residuals = spdat.sens[["nb_residuals"]]), here("figures", "source_files", "sfig10.csv"))
 sfig10 <- ggplot() + 
   geom_sf(data = basemap_water, fill = "white", lwd = 0) + 
   geom_sf(data = st_as_sf(spdat.sens), aes(fill = cut_width(nb_residuals, width = 1)), lwd = 0.2) + 
@@ -1945,6 +1968,7 @@ Subway_BWQS_3split_df2 <- Subway_BWQS_3split_df1 %>%
                        levels = c("High (≥ 75%ile)", "Mid (IQR)", "Low (≤ 25%ile)")))
 
 # Supplementary Figure 7
+write_csv(Subway_BWQS_3split_df2 %>% dplyr::select(date, usage.median.ratio, Risk, Lower, Upper, Prediction), here("figures", "source_files", "sfig7.csv"))
 sfig7 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_3split_df2, aes(x = date, y = usage.median.ratio, color = as.factor(Risk)), alpha = .5, position = position_jitter(height = 0, width = 0.4))+ 
   geom_ribbon(data = subset(Subway_BWQS_3split_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
@@ -2031,6 +2055,7 @@ Subway_BWQS_ZCTA_df2 <- Subway_BWQS_ZCTA_df1 %>%
                        levels = c("High (≥ 75%ile)", "Mid (IQR)", "Low (≤ 25%ile)")))
 
 # Supplementary Figure 8
+write_csv(Subway_BWQS_ZCTA_df2 %>% dplyr::select(date, usage.median.ratio, Lower, Upper, Prediction, Risk), here("figures", "source_files", "sfig8.csv"))
 sfig8 <- ggplot() + 
   geom_jitter(data = Subway_BWQS_ZCTA_df2, aes(x = date, y = usage.median.ratio, color = Risk), size = 0.3, alpha = 0.3, position = position_jitter(height = 0, width = 0.42))+ 
   geom_ribbon(data = subset(Subway_BWQS_ZCTA_df2, Risk == "High (≥ 75%ile)"), aes(x = date, ymin = Lower, ymax = Upper), fill = "grey50") +
@@ -2050,6 +2075,7 @@ if(export.figs) ggsave(sfig8 , filename = file.path(fig.path, paste0("sfig8", "_
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
 #+ mta_vs_google, message=FALSE
 source(here("code/mta_vs_google.R"), echo = FALSE)
+write_csv(comp_long, here("figures", "source_files", "sfig9.csv"))
 mobplot
 
 #' # Appendix
