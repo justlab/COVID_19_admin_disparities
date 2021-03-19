@@ -1322,11 +1322,11 @@ Demographics_for_ridges <- Demographics %>%
   left_join(., ZCTA_BQWS, by = "zcta") %>%
   dplyr::select(-total_pop1) %>%
   gather(key = "Race/Ethnicity", value = "Population", hisplat_raceethnic:other_raceethnic) %>%
-  mutate(`Race/Ethnicity` = if_else(`Race/Ethnicity`=="hisplat_raceethnic","Hispanic/Latinx",
+  mutate(`Race/Ethnicity` = if_else(`Race/Ethnicity`=="hisplat_raceethnic","Hispanic/LatinX",
                                     if_else(`Race/Ethnicity`=="nonhispLat_black_raceethnic", "Black",
                                             if_else(`Race/Ethnicity`=="nonhispLat_white_raceethnic", "White",
                                                     if_else(`Race/Ethnicity`== "nonhispLat_asian_raceethnic", "Asian", "Other")))),
-         `Race/Ethnicity` = factor(`Race/Ethnicity`, levels = c( "White",  "Asian", "Other","Hispanic/Latinx","Black")),
+         `Race/Ethnicity` = factor(`Race/Ethnicity`, levels = c( "White",  "Asian", "Other","Hispanic/LatinX","Black")),
          Population = as.numeric(Population)) 
 
 (Demographics_for_ridges %>%
@@ -1392,12 +1392,12 @@ Race_Ethncity_all <- Demographics %>%
 Demographics_by_BWQS <- bind_rows(Race_Ethncity_all, Race_Ethncity_below25th, Race_Ethncity_btw_25th75th, Race_Ethncity_above_75th) %>%
   mutate(Other = other_raceethnic + nonhispLat_amerindian_raceethnic)  %>%
   dplyr::select(-other_raceethnic, -nonhispLat_amerindian_raceethnic, - total_pop1) %>%
-  rename("Hispanic/Latinx" = "hisplat_raceethnic",
+  rename("Hispanic/LatinX" = "hisplat_raceethnic",
          "Black" = "nonhispLat_black_raceethnic", 
           "White" = "nonhispLat_white_raceethnic", 
          "Asian" = "nonhispLat_asian_raceethnic") %>%
   gather(., "Race/Ethnicity", "Proportion", 1:4,6) %>%
-  mutate(`Race/Ethnicity` = factor(`Race/Ethnicity`, levels = c("Other", "Asian", "White", "Hispanic/Latinx", "Black")),
+  mutate(`Race/Ethnicity` = factor(`Race/Ethnicity`, levels = c("Other", "Asian", "White", "Hispanic/LatinX", "Black")),
          Group = factor(Group, levels = c("NYC Population", "Below 25th percentile BWQS", "Between 25-75th percentile BWQS", "Above 75th percentile BWQS")))
 
 labels_demographics <- c("NYC Population" = "NYC Population", "Below 25th percentile BWQS" = "Below 25th\npercentile BWQS", 
@@ -1411,7 +1411,7 @@ sfig4 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
             aes(xmin=as.numeric(Group)-.35,xmax=as.numeric(Group)+.35, ymin=0, ymax=100, fill="gray85"), color = "gray", alpha = .1) +
   geom_bar(data = subset(Demographics_by_BWQS, Group!="NYC Population"), position="stack", stat="identity", width = .75) +
   geom_bar(data = subset(Demographics_by_BWQS, Group=="NYC Population"), position="stack", stat="identity", width = .45) +
-  scale_fill_manual(breaks = c("Other", "Asian", "White", "Hispanic/Latinx", "Black"), 
+  scale_fill_manual(breaks = c("Other", "Asian", "White", "Hispanic/LatinX", "Black"), 
                     values = c("#984ea3","#ff7f00","gray85", "#4daf4a", "#e41a1c", "#377eb8"))  +
   geom_text(aes(label=ifelse(Proportion >= 5, paste0(sprintf("%.0f", Proportion),"%"),"")),
             position=position_stack(vjust=0.5), colour="black", size = 8) + 
