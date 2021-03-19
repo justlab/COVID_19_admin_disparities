@@ -73,7 +73,7 @@ water_points = st_as_sf(data.frame(name = c("lower bay", "lower Hudson", "upper 
                                    x = c(-74.026, -73.931, -73.895),
                                    y = c(40.564, 40.885, 40.995)),
                         coords = c("x", "y"), crs = 4326)
-water_poly_ids = st_intersects(split_water, st_combine(water_points), sparse = FALSE)
+water_poly_ids = suppressWarnings(st_intersects(split_water, st_combine(water_points), sparse = FALSE))
 
 basemap_water = split_water[water_poly_ids,] %>% st_union()
 
