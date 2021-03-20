@@ -1146,7 +1146,7 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
   xlab("") + 
   ylab("Mean (95% credible intervals)") +
   scale_x_discrete(labels = labels1) + 
-  theme_set(theme_bw(base_size = 18)) +
+  theme_bw(base_size = 18) +
   facet_grid(group~., scales = "free", space = "free") +
   theme(strip.text.x = element_text(size = 14))
 if(export.figs){ 
@@ -1246,7 +1246,8 @@ BWQS_scatter <- ggplot(sim_bwqs_df, aes(x = bwqs_seq)) +
   geom_line(aes(y = mean)) + 
   geom_point(data = data.frame(BWQS_index, y = m1data$data_list$y), aes(BWQS_index, y), alpha = 0.5) + 
   scale_x_continuous("COVID-19 inequity index") + 
-  scale_y_continuous("Infections per 100,000", label=comma)
+  scale_y_continuous("Infections per 100,000", label=comma) + 
+  theme_bw(base_size = 18)
 BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", fill = "grey40", margins = "both", 
                                     xparams = list(binwidth = 0.5), yparams = list(binwidth = 200))
 if(export.figs) {
@@ -1262,7 +1263,8 @@ testing_scatter <- ggplot(sim_testing_df, aes(x = x)) +
   geom_point(data = data.frame(testing_ratio = ZCTA_ACS_COVID$testing_ratio, y = m1data$data_list$y), 
              aes(testing_ratio, y), alpha = 0.5) + 
   scale_x_continuous("Testing ratio") + 
-  scale_y_continuous("Infections per 100,000", label=comma)
+  scale_y_continuous("Infections per 100,000", label=comma) + 
+  theme_bw(base_size = 18)
 testing_scatter <- ggExtra::ggMarginal(testing_scatter, type = "histogram", fill = "grey40", margins = "both",
                                        xparams = list(binwidth = 0.005), yparams = list(binwidth = 200))
 if(export.figs) {
@@ -1350,6 +1352,7 @@ fig4 <- ggplot(Demographics_for_ridges,
     stat ="density") + 
   scale_y_discrete(expand = c(0, 0)) + 
   expand_limits(y = 6) + 
+  theme_bw(base_size = 18) + 
   theme(legend.position = "none")
 if(export.figs){
   write_figs(fig4, "fig4", fig_width = 8, fig_height = 5)
@@ -1850,6 +1853,7 @@ sfig10 <- ggplot() +
            ylim = c(plot_bounds$ymin, plot_bounds$ymax),
            expand = FALSE) + 
   labs(fill = "Residuals\n(Standard Deviations)") + 
+  theme_bw() + 
   theme(panel.background = element_rect(fill = "#cccccc"), 
         panel.grid = element_blank(),
         axis.text = element_blank(),
