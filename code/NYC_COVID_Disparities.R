@@ -83,7 +83,7 @@ if(!dir.exists(fig.path)) dir.create(fig.path)
 
 export.figs = TRUE 
 vector.figs = FALSE
-if(export.figs) message(paste0("Saving ", ifelse(vector.figs, "EPS", "PNG") ," figures to:\n "), fig.path) else message("Not saving figures")
+if(export.figs) message(paste0("Saving ", ifelse(vector.figs, "PDF", "PNG") ," figures to:\n "), fig.path) else message("Not saving figures")
 
 # source file output directory for publication
 source_path = here("figures", "source_files")
