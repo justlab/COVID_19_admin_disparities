@@ -1144,7 +1144,7 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
   geom_pointrange() + 
   coord_flip() + 
   xlab("") + 
-  ylab("Mean (95% credible intervals)") +
+  ylab("Variable Weight: Mean (95% credible intervals)") +
   scale_x_discrete(labels = labels1) + 
   theme_bw(base_size = 18) +
   facet_grid(group~., scales = "free", space = "free") +
