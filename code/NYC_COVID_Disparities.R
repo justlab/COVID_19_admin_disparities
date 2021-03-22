@@ -958,6 +958,7 @@ if(export.figs) {
     unlink(paste0(fig_path, ".svg"))
   }
 }
+#' ## Supp. Fig. 1
 #' ![](`r file.path(fig.path, paste0("sfig1_", Sys.Date(), ".png"))`)
 
 #+ part1_step2b
@@ -1080,6 +1081,7 @@ sfig3_qq <- ggplot(data.frame(x = residuals_qq_unif$x, y = residuals_qq_unif$y))
 if(export.figs){
   write_figs(sfig3_qq, "sfig3", fig_width = 3.5, fig_height = 3.4)
 }
+#' ## Supp. Fig. 3
 #' ![](`r file.path(fig.path, paste0("sfig3_", Sys.Date(), ".png"))`)
 write_csv(as_tibble(residuals_qq_unif), path = file.path(source_path, "sfig3.csv"))
 # examine parameter estimates
@@ -1152,6 +1154,7 @@ fig2 <- ggplot(data=BWQS_fits, aes(x= reorder(label, mean), y=mean, ymin=lower, 
 if(export.figs){ 
   write_figs(fig2, "fig2", fig_width = 8, fig_height = 8)
 }  
+#' ## Fig. 2
 #' ![](`r file.path(fig.path, paste0("fig2", "_", Sys.Date(),".png"))`)
 
 #+ part1_step4
@@ -1253,6 +1256,7 @@ BWQS_scatter <- ggExtra::ggMarginal(BWQS_scatter, type = "histogram", fill = "gr
 if(export.figs) {
   write_figs(BWQS_scatter, "fig1", fig_width = 96*5, fig_height = 96*5)
 }
+#' ## Fig. 1
 #' ![](`r file.path(fig.path, paste0("fig1_", Sys.Date(), ".png"))`)
 
 # Visualize the relationship between testing_ratio and infection rate at the median BWQS
@@ -1270,6 +1274,7 @@ testing_scatter <- ggExtra::ggMarginal(testing_scatter, type = "histogram", fill
 if(export.figs) {
   write_figs(testing_scatter, "sfig2", fig_width = 96*5, fig_height = 96*5)
 }
+#' ## Supp. Fig. 2
 #' ![](`r file.path(fig.path, paste0("sfig2_", Sys.Date(), ".png"))`)
 
 #+ part1_step5
@@ -1357,6 +1362,7 @@ fig4 <- ggplot(Demographics_for_ridges,
 if(export.figs){
   write_figs(fig4, "fig4", fig_width = 8, fig_height = 5)
 } 
+#' ## Fig. 4
 #' ![](`r file.path(fig.path, paste0("fig4","_",Sys.Date(),".png"))`)
 
 Below_25th_zctas <- ZCTA_BQWS %>%
@@ -1433,6 +1439,7 @@ sfig4 <- ggplot(Demographics_by_BWQS, aes(fill=`Race/Ethnicity`, y=Proportion, x
 if(export.figs){
   write_figs(sfig4, "sfig4", fig_width = 12, fig_height = 6)
 } 
+#' ## Supp. Fig. 4
 #' ![](`r file.path(fig.path, paste0("sfig4","_",Sys.Date(),".png"))`)
 
 t_postm1 = Sys.time()
@@ -1643,6 +1650,7 @@ sfig6 <- ggplot() + geom_point(data = DRM_mean_predictions, aes(x = Mean_Ridersh
 if(export.figs){
   write_figs(sfig6, "sfig6", fig_width = 8, fig_height = 5)
 } 
+#' ## Supp. Fig. 6
 #' ![](`r file.path(fig.path, paste0("sfig6", "_", Sys.Date(), ".png"))`)
 
 # create a dataframe for the analysis 
@@ -1710,6 +1718,7 @@ fig5 <- ggplot() +
 if(export.figs){
   write_figs(fig5, "fig5", fig_width = 8, fig_height = 6)
 } 
+#' ## Fig. 5
 #' ![](`r file.path(fig.path, paste0("fig5", "_", Sys.Date() ,".png"))`)
 
 # which UHF neighborhoods were dropped?
@@ -1741,6 +1750,7 @@ sfig5 <- ggplot() +
 if(export.figs){
   write_figs(sfig5, "sfig5", fig_width = 4, fig_height = 4)
 }
+#' ## Supp. Fig. 5
 #' ![](`r file.path(fig.path, paste0("sfig5", "_", Sys.Date(),".png"))`)  
 
 #' 
@@ -1806,6 +1816,7 @@ if(export.figs) {
     unlink(fig3_path)
   } 
 }
+#' ## Fig. 3
 #' ![](`r file.path(fig.path, paste0("fig3_combined_", Sys.Date(), ".png"))`)
 
 #+ part3_step2
@@ -1867,6 +1878,7 @@ sfig10 <- ggplot() +
 if(export.figs){
   write_figs(sfig10, "sfig10", fig_width = 5, fig_height = 3.2)
 } 
+#' ## Supp. Fig. 10
 #' ![](`r file.path(fig.path, paste0("sfig10", "_", Sys.Date(),".png"))`)
 
 #' 
@@ -2038,7 +2050,8 @@ sfig7 <- ggplot() +
 if(export.figs){ 
   write_figs(sfig7, "sfig7", fig_width = 8, fig_height = 6)
 }
-#' ![](`r file.path(fig.path, paste0("sfig7 ", "_", Sys.Date(),".png"))`)
+#' ## Supp. Fig. 7
+#' ![](`r file.path(fig.path, paste0("sfig7", "_", Sys.Date(),".png"))`)
 
 # ZCTA level BWQS for subway 
 Subway_ridership_by_ZCTA <- relative.subway.usage(2020, by = "zcta")
@@ -2126,6 +2139,7 @@ sfig8 <- ggplot() +
 if(export.figs){ 
   write_figs(sfig8, "sfig8", fig_width = 8, fig_height = 6)
 }
+#' ## Supp. Fig. 8
 #' ![](`r file.path(fig.path, paste0("sfig8", "_", Sys.Date(),".png"))`)
 
 # Supplementary Figure 9: compare MTA turnstile data to Google mobility reports
