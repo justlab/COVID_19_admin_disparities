@@ -1,5 +1,8 @@
 This repository holds the data-processing and analysis code for the research project "Assessing capacity to social distance and neighborhood-level health disparities during the COVID-19 pandemic".
 
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.4628289.svg
+   :target: https://doi.org/10.5281/zenodo.4628289
+
 Instructions
 ============================================================
  
