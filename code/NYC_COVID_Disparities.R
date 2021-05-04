@@ -1295,7 +1295,7 @@ fig3a <- ggplot() +
   scalebar(ZCTA_BWQS_COVID_shp, dist = 5, dist_unit = "km", 
            transform = TRUE, model = "WGS84", 
            st.size = 2.8, height = 0.015, border.size = 0.5, st.dist = 0.011,
-           anchor = c(x = -73.71, y = 40.49)) + 
+           anchor = c(x = -73.71, y = 40.495)) + 
   scale_fill_gradientn(colours=brewer_pal("YlGnBu", type = "seq")(7)) + 
   coord_sf(crs = st_crs(ZCTA_BWQS_COVID_shp),
            xlim = c(plot_bounds$xmin, plot_bounds$xmax), 
@@ -1303,6 +1303,8 @@ fig3a <- ggplot() +
             expand = FALSE) +
   theme_bw(base_size = 6) + 
   labs(fill = "COVID-19 Inequity Index") +
+  annotate("text", x = -73.709, y = 40.48, label = "water mask © OpenStreetMap contributors",
+           size = theme_get()$text[["size"]]/4, hjust = "right") + 
   theme(legend.title = element_text(face = "bold", size = 9), 
         panel.background = element_rect(fill = "#cccccc"), 
         legend.background = element_rect(fill = "transparent"),
@@ -1743,6 +1745,8 @@ sfig5 <- ggplot() +
            xlim = c(plot_bounds$xmin, plot_bounds$xmax), 
            ylim = c(plot_bounds$ymin, plot_bounds$ymax),
            expand = FALSE) +
+  annotate("text", x = -73.709, y = 40.48, label = "water mask © OpenStreetMap contributors",
+           size = theme_get()$text[["size"]]/6, hjust = "right") +
   theme_bw() + 
   theme_smallmaps + 
   theme(legend.position = c(0.22, 0.86), plot.margin = margin(0, 0, 0, 0, "pt"))
@@ -1864,6 +1868,8 @@ sfig10 <- ggplot() +
            ylim = c(plot_bounds$ymin, plot_bounds$ymax),
            expand = FALSE) + 
   labs(fill = "Residuals\n(Standard Deviations)") + 
+  annotate("text", x = -73.709, y = 40.48, label = "water mask © OpenStreetMap contributors",
+           size = theme_get()$text[["size"]]/6, hjust = "right") +
   theme_bw() + 
   theme(panel.background = element_rect(fill = "#cccccc"), 
         panel.grid = element_blank(),
