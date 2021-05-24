@@ -225,7 +225,7 @@ if (file.exists(file.path(data.root, "Bldg_Footprints.qs"))) {
 
 #+ load_rest_of_data
 ZCTA_by_boro <- download(
-    "https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm",
+    "https://web.archive.org/web/20180209024431id_/https://www.health.ny.gov/statistics/cancer/registry/appendix/neighborhoods.htm",
     "uhf_neighborhoods.html",
     function(p)
        {# XML::readHTMLTable doesn't identify the columns correctly.
