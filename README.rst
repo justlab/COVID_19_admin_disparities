@@ -1,4 +1,6 @@
-This repository holds the data-processing and analysis code for the research project "Assessing capacity to social distance and neighborhood-level health disparities during the COVID-19 pandemic".
+This repository holds the data-processing and analysis code for the research project "Neighborhood-level disparities and subway utilization during the COVID-19 pandemic in New York City," published in Nature Communications: `10.1038/s41467-021-24088-7 <https://doi.org/10.1038/s41467-021-24088-7>`_  
+
+A snapshot of the publication version of the code is archived at Zenodo:  
 
 .. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.4974211.svg
    :target: https://doi.org/10.5281/zenodo.4974211
@@ -6,7 +8,7 @@ This repository holds the data-processing and analysis code for the research pro
 Instructions
 ============================================================
  
-All data collection, cleaning, and analysis are conducted via code/NYC_COVID_Disparities.R 
+All data collection, cleaning, and analysis are conducted via :code:`code/NYC_COVID_Disparities.R` 
 
 Example output
 ============================================================
@@ -31,4 +33,3 @@ This program is free software: you can redistribute it and/or modify it under th
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the `GNU General Public License`_ for more details.
 
 .. _`GNU General Public License`: http://www.gnu.org/licenses/
-
