@@ -10,6 +10,10 @@
 #' ---
 #/* This script contains inline R Markdown for added legibility when using knitr::spin 
 # or compiling a report in R Studio. R Markdown lines begin with #', #+, or #/* */
+#' **The source code for this project is at:**  
+#' https://github.com/justlab/COVID_19_admin_disparities  
+#' **This project is part of the the following publication:**  
+#' Carrión, D., Colicino, E., Pedretti, N. F., Arfer, K. B., Rush, J., DeFelice, N., & Just, A. C. (2021). Neighborhood-level disparities and subway utilization during the COVID-19 pandemic in New York City. Nature Communications, 12(1). https://doi.org/10.1038/s41467-021-24088-7  
 
 t_start = Sys.time()
 
